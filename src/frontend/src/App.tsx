@@ -8,14 +8,20 @@ import ChicksPlacement from "./pages/ChicksPlacement";
 import Companies from "./pages/Companies";
 import DailyEntry from "./pages/DailyEntry";
 import Dashboard from "./pages/Dashboard";
+import FarmDashboard from "./pages/FarmDashboard";
 import Farms from "./pages/Farms";
 import FeedIssue from "./pages/FeedIssue";
 import FeedPurchase from "./pages/FeedPurchase";
 import FeedStock from "./pages/FeedStock";
+import GCProduction from "./pages/GCProduction";
+import GCSchemes from "./pages/GCSchemes";
+import GCSettlementReport from "./pages/GCSettlementReport";
 import Login from "./pages/Login";
 import Payments from "./pages/Payments";
+import PerformanceReport from "./pages/PerformanceReport";
 import Receipts from "./pages/Receipts";
 import Reports from "./pages/Reports";
+import UserManagement from "./pages/UserManagement";
 import Zones from "./pages/Zones";
 
 export default function App() {
@@ -35,6 +41,14 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="farms" element={<Farms />} />
+            <Route
+              path="farm-dashboard/:farmId"
+              element={
+                <ProtectedRoute>
+                  <FarmDashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route path="chicks" element={<ChicksPlacement />} />
             <Route path="daily-entry" element={<DailyEntry />} />
             <Route path="feed/purchase" element={<FeedPurchase />} />
@@ -42,6 +56,31 @@ export default function App() {
             <Route path="feed/issue" element={<FeedIssue />} />
             <Route path="sales" element={<BirdSales />} />
             <Route path="reports" element={<Reports />} />
+            <Route
+              path="performance-report"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                    "Farmer",
+                    "Dealer",
+                  ]}
+                >
+                  <PerformanceReport />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
+                  <UserManagement />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="companies"
               element={
@@ -83,6 +122,45 @@ export default function App() {
                   roles={["SuperAdmin", "CompanyAdmin", "Manager"]}
                 >
                   <Receipts />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="gc/schemes"
+              element={
+                <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
+                  <GCSchemes />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="gc/production"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                  ]}
+                >
+                  <GCProduction />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="gc/settlement-report"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                    "Farmer",
+                  ]}
+                >
+                  <GCSettlementReport />
                 </ProtectedRoute>
               }
             />

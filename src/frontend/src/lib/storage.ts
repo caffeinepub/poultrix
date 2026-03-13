@@ -6,12 +6,18 @@ export type Farm = {
   companyId?: string;
   zoneId?: string;
   branchId?: string;
+  farmerName?: string;
+  farmerContact?: string;
+  address?: string;
+  supervisorId?: string;
+  dealerId?: string;
 };
 export type Shed = {
   id: string;
   name: string;
   farmId: string;
   capacity: number;
+  shedType?: "Open" | "Environment Controlled";
 };
 export type Batch = {
   id: string;
@@ -27,6 +33,7 @@ export type Batch = {
   totalPlacementCost: number;
   birdsAlive: number;
   status: "active" | "sold" | "closed";
+  initialBodyWeightGrams?: number;
 };
 export type DailyEntry = {
   id: string;
@@ -93,9 +100,15 @@ export type User = {
     | "Dealer"
     | "Farmer"
     | "Manager"
-    | "Supervisor";
+    | "Supervisor"
+    | "Staff";
   companyId?: string;
   name: string;
+  assignedFarmIds?: string[];
+  assignedZoneIds?: string[];
+  assignedBranchIds?: string[];
+  assignedShedId?: string;
+  active?: boolean;
 };
 export type Company = {
   id: string;
@@ -139,6 +152,36 @@ export type Receipt = {
   notes: string;
   enteredBy: string;
 };
+export type GCScheme = {
+  id: string;
+  companyId: string;
+  name: string;
+  baseGCRate: number;
+  standardFCR: number;
+  standardMortalityPct: number;
+  fcrBonusPerBird: number;
+  mortalityPenaltyPerBird: number;
+};
+export type GCSettlement = {
+  id: string;
+  batchId: string;
+  batchNumber: string;
+  farmId: string;
+  schemeId: string;
+  birdsPlaced: number;
+  birdsSold: number;
+  mortalityCount: number;
+  mortalityPct: number;
+  totalFeedKg: number;
+  avgBodyWeightKg: number;
+  finalFCR: number;
+  gcRatePerBird: number;
+  fcrBonus: number;
+  mortalityPenalty: number;
+  totalGCPayable: number;
+  closedAt: string;
+  closedBy: string;
+};
 
 function get<T>(key: string): T[] {
   try {
@@ -163,6 +206,7 @@ function seedUsers() {
         password: "Admin@123",
         role: "SuperAdmin",
         name: "Super Admin",
+        active: true,
       },
     ]);
   }
@@ -177,6 +221,12 @@ export const storage = {
     const n = { ...u, id: uid() };
     set("px_users", [...d, n]);
     return n;
+  },
+  updateUser: (id: string, updates: Partial<User>) => {
+    const d = get<User>("px_users").map((u) =>
+      u.id === id ? { ...u, ...updates } : u,
+    );
+    set("px_users", d);
   },
   getUserByUsername: (username: string) =>
     get<User>("px_users").find((u) => u.username === username),
@@ -282,6 +332,12 @@ export const storage = {
     set("px_farms", [...d, n]);
     return n;
   },
+  updateFarm: (id: string, updates: Partial<Farm>) => {
+    const d = get<Farm>("px_farms").map((f) =>
+      f.id === id ? { ...f, ...updates } : f,
+    );
+    set("px_farms", d);
+  },
   deleteFarm: (id: string) =>
     set(
       "px_farms",
@@ -296,6 +352,18 @@ export const storage = {
     set("px_sheds", [...d, n]);
     return n;
   },
+  updateShed: (id: string, updates: Partial<Shed>) => {
+    const d = get<Shed>("px_sheds").map((s) =>
+      s.id === id ? { ...s, ...updates } : s,
+    );
+    set("px_sheds", d);
+  },
+  getShedsByFarm: (farmId: string) =>
+    get<Shed>("px_sheds").filter((s) => s.farmId === farmId),
+  getActiveBatchByShed: (shedId: string) =>
+    get<Batch>("px_batches").find(
+      (b) => b.shedId === shedId && b.status === "active",
+    ),
 
   // Batches
   getBatches: () => get<Batch>("px_batches"),
@@ -376,6 +444,29 @@ export const storage = {
     const d = get<BirdSale>("px_sales");
     const n = { ...s, id: uid() };
     set("px_sales", [...d, n]);
+    return n;
+  },
+
+  // GC Schemes
+  getGCSchemes: () => get<GCScheme>("px_gc_schemes"),
+  addGCScheme: (s: Omit<GCScheme, "id">) => {
+    const d = get<GCScheme>("px_gc_schemes");
+    const n = { ...s, id: uid() };
+    set("px_gc_schemes", [...d, n]);
+    return n;
+  },
+  deleteGCScheme: (id: string) =>
+    set(
+      "px_gc_schemes",
+      get<GCScheme>("px_gc_schemes").filter((s) => s.id !== id),
+    ),
+
+  // GC Settlements
+  getGCSettlements: () => get<GCSettlement>("px_gc_settlements"),
+  addGCSettlement: (s: Omit<GCSettlement, "id">) => {
+    const d = get<GCSettlement>("px_gc_settlements");
+    const n = { ...s, id: uid() };
+    set("px_gc_settlements", [...d, n]);
     return n;
   },
 };

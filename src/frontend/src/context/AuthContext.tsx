@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback((username: string, password: string): boolean => {
     const user = storage.getUserByUsername(username);
-    if (user && user.password === password) {
+    if (user && user.password === password && user.active !== false) {
       setCurrentUser(user);
       return true;
     }

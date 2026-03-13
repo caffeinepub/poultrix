@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAccessibleFarmIds } from "@/lib/roleFilter";
 import { type FeedIssue as FI, storage } from "@/lib/storage";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -16,9 +17,19 @@ const FEED_TYPES = [
 ];
 
 export default function FeedIssue() {
-  const farms = storage.getFarms();
+  const accessibleFarmIds = useAccessibleFarmIds();
+  const allFarms = storage.getFarms();
+  const farms =
+    accessibleFarmIds === null
+      ? allFarms
+      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
   const sheds = storage.getSheds();
-  const [issues, setIssues] = useState<FI[]>(storage.getFeedIssues());
+  const allIssues = storage.getFeedIssues();
+  const [issues, setIssues] = useState<FI[]>(
+    accessibleFarmIds === null
+      ? allIssues
+      : allIssues.filter((i) => accessibleFarmIds.includes(i.farmId)),
+  );
   const [form, setForm] = useState({
     farmId: "",
     shedId: "",
@@ -41,7 +52,12 @@ export default function FeedIssue() {
       quantityBags: Number.parseInt(form.quantityBags),
       issueDate: form.issueDate,
     });
-    setIssues(storage.getFeedIssues());
+    const updated = storage.getFeedIssues();
+    setIssues(
+      accessibleFarmIds === null
+        ? updated
+        : updated.filter((i) => accessibleFarmIds.includes(i.farmId)),
+    );
     setForm({
       farmId: "",
       shedId: "",
@@ -58,16 +74,19 @@ export default function FeedIssue() {
         <CardContent className="p-6">
           <form
             onSubmit={handleSubmit}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            className="grid grid-cols-2 md:grid-cols-3 gap-4"
           >
             <div>
               <Label>Farm *</Label>
               <select
                 data-ocid="feed_issue.farm.select"
-                required
                 value={form.farmId}
                 onChange={(e) =>
-                  setForm({ ...form, farmId: e.target.value, shedId: "" })
+                  setForm((f) => ({
+                    ...f,
+                    farmId: e.target.value,
+                    shedId: "",
+                  }))
                 }
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
@@ -84,10 +103,13 @@ export default function FeedIssue() {
               <select
                 data-ocid="feed_issue.shed.select"
                 value={form.shedId}
-                onChange={(e) => setForm({ ...form, shedId: e.target.value })}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, shedId: e.target.value }))
+                }
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={!form.farmId}
               >
-                <option value="">Select Shed...</option>
+                <option value="">All Sheds</option>
                 {filteredSheds.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -98,10 +120,11 @@ export default function FeedIssue() {
             <div>
               <Label>Feed Type *</Label>
               <select
-                data-ocid="feed_issue.feed_type.select"
-                required
+                data-ocid="feed_issue.type.select"
                 value={form.feedType}
-                onChange={(e) => setForm({ ...form, feedType: e.target.value })}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, feedType: e.target.value }))
+                }
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="">Select Type...</option>
@@ -113,16 +136,14 @@ export default function FeedIssue() {
               </select>
             </div>
             <div>
-              <Label>Quantity (bags) *</Label>
+              <Label>Quantity (Bags) *</Label>
               <Input
                 data-ocid="feed_issue.qty.input"
-                required
                 type="number"
                 value={form.quantityBags}
                 onChange={(e) =>
-                  setForm({ ...form, quantityBags: e.target.value })
+                  setForm((f) => ({ ...f, quantityBags: e.target.value }))
                 }
-                placeholder="0"
               />
             </div>
             <div>
@@ -132,65 +153,57 @@ export default function FeedIssue() {
                 type="date"
                 value={form.issueDate}
                 onChange={(e) =>
-                  setForm({ ...form, issueDate: e.target.value })
+                  setForm((f) => ({ ...f, issueDate: e.target.value }))
                 }
               />
             </div>
-            <div className="sm:col-span-2 flex justify-end">
-              <Button type="submit" data-ocid="feed_issue.submit.button">
-                <Plus size={16} className="mr-1" />
-                Issue Feed
+            <div className="flex items-end">
+              <Button
+                type="submit"
+                className="w-full"
+                data-ocid="feed_issue.submit_button"
+              >
+                <Plus size={16} className="mr-1" /> Issue Feed
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      <div>
-        <h3 className="font-semibold mb-3">Issue History</h3>
-        {issues.length === 0 ? (
-          <Card data-ocid="feed_issue.empty_state">
-            <CardContent className="p-6 text-center text-muted-foreground">
-              No feed issues recorded.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-ocid="feed_issue.table">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-left p-2">Farm</th>
-                  <th className="text-left p-2">Shed</th>
-                  <th className="text-left p-2">Feed Type</th>
-                  <th className="text-right p-2">Bags</th>
+      {issues.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-ocid="feed_issue.table">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="text-left p-2">Date</th>
+                <th className="text-left p-2">Farm</th>
+                <th className="text-left p-2">Shed</th>
+                <th className="text-left p-2">Feed Type</th>
+                <th className="text-right p-2">Bags</th>
+              </tr>
+            </thead>
+            <tbody>
+              {issues.map((i, idx) => (
+                <tr
+                  key={i.id}
+                  className="border-b hover:bg-muted/30"
+                  data-ocid={`feed_issue.row.${idx + 1}`}
+                >
+                  <td className="p-2">{i.issueDate}</td>
+                  <td className="p-2">
+                    {farms.find((f) => f.id === i.farmId)?.name || "-"}
+                  </td>
+                  <td className="p-2 text-muted-foreground">
+                    {sheds.find((s) => s.id === i.shedId)?.name || "-"}
+                  </td>
+                  <td className="p-2">{i.feedType}</td>
+                  <td className="p-2 text-right">{i.quantityBags}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {[...issues].reverse().map((f, i) => (
-                  <tr
-                    key={f.id}
-                    className="border-b hover:bg-muted/30"
-                    data-ocid={`feed_issue.row.${i + 1}`}
-                  >
-                    <td className="p-2">{f.issueDate}</td>
-                    <td className="p-2">
-                      {farms.find((x) => x.id === f.farmId)?.name || "-"}
-                    </td>
-                    <td className="p-2">
-                      {sheds.find((x) => x.id === f.shedId)?.name || "-"}
-                    </td>
-                    <td className="p-2">{f.feedType}</td>
-                    <td className="p-2 text-right font-medium">
-                      {f.quantityBags}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

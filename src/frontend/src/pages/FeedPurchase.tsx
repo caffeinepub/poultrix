@@ -107,7 +107,7 @@ export default function FeedPurchase() {
               />
             </div>
             <div>
-              <Label>Rate per Bag (PKR)</Label>
+              <Label>Rate per Bag (₹)</Label>
               <Input
                 data-ocid="feed_purchase.rate.input"
                 type="number"
@@ -119,7 +119,7 @@ export default function FeedPurchase() {
               />
             </div>
             <div>
-              <Label>Discount (PKR)</Label>
+              <Label>Discount (₹)</Label>
               <Input
                 data-ocid="feed_purchase.discount.input"
                 type="number"
@@ -146,7 +146,7 @@ export default function FeedPurchase() {
                 Total Amount:
               </span>
               <span className="font-bold text-xl">
-                PKR {totalAmount.toLocaleString()}
+                ₹ {totalAmount.toLocaleString()}
               </span>
             </div>
             <div className="sm:col-span-2 flex justify-end">
@@ -195,7 +195,7 @@ export default function FeedPurchase() {
                     <td className="p-2 text-right">{p.ratePerBag}</td>
                     <td className="p-2 text-right">{p.discountAmount}</td>
                     <td className="p-2 text-right font-medium">
-                      PKR {p.totalAmount.toLocaleString()}
+                      ₹ {p.totalAmount.toLocaleString()}
                     </td>
                   </tr>
                 ))}

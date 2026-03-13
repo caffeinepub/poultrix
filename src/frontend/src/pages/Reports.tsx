@@ -3,11 +3,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { storage } from "@/lib/storage";
+import { useAuth } from "@/context/AuthContext";
+import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { type Branch, type Company, type Zone, storage } from "@/lib/storage";
 import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Row = Record<string, string | number>;
+
+function lookupName(
+  id: string | undefined,
+  list: { id: string; name: string }[],
+): string {
+  return id ? (list.find((x) => x.id === id)?.name ?? "-") : "-";
+}
 
 function downloadCSV(rows: Row[], filename: string) {
   if (!rows.length) return;
@@ -138,17 +147,146 @@ function ReportTable({
 }
 
 export default function Reports() {
-  const batches = storage.getBatches();
-  const farms = storage.getFarms();
-  const dailyEntries = storage.getDailyEntries();
+  const { currentUser } = useAuth();
+  const accessibleFarmIds = useAccessibleFarmIds();
+
+  const allBatches = storage.getBatches();
+  const allFarms = storage.getFarms();
+  const allDailyEntries = storage.getDailyEntries();
   const feedPurchases = storage.getFeedPurchases();
-  const birdSales = storage.getBirdSales();
-  const payments = storage.getPayments();
-  const receipts = storage.getReceipts();
+  const allBirdSales = storage.getBirdSales();
+  const allPayments = storage.getPayments();
+  const allReceipts = storage.getReceipts();
+  const allUsers = storage.getUsers();
+  const allCompanies = storage.getCompanies();
+  const allZones = storage.getZones();
+  const allBranches = storage.getBranches();
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [batchFilter, setBatchFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [zoneFilter, setZoneFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [farmFilter, setFarmFilter] = useState("");
+  const [farmerFilter, setFarmerFilter] = useState("");
+
+  // Role-accessible base farms
+  const accessibleFarms = allFarms.filter(
+    (f) => accessibleFarmIds === null || accessibleFarmIds.includes(f.id),
+  );
+
+  // Companies visible to user (based on accessible farms)
+  const accessibleCompanyIds = useMemo(() => {
+    if (accessibleFarmIds === null) return null;
+    const ids = new Set(
+      accessibleFarms.map((f) => f.companyId).filter(Boolean) as string[],
+    );
+    return [...ids];
+  }, [accessibleFarmIds, accessibleFarms]);
+
+  const visibleCompanies = useMemo(() => {
+    if (accessibleCompanyIds === null) return allCompanies;
+    return allCompanies.filter((c) => accessibleCompanyIds.includes(c.id));
+  }, [accessibleCompanyIds, allCompanies]);
+
+  // Zones filtered by selected company (and role-accessible)
+  const visibleZones = useMemo(() => {
+    const baseZones = allZones.filter(
+      (z) =>
+        accessibleCompanyIds === null ||
+        accessibleCompanyIds.includes(z.companyId),
+    );
+    if (!companyFilter) return baseZones;
+    return baseZones.filter((z) => z.companyId === companyFilter);
+  }, [allZones, accessibleCompanyIds, companyFilter]);
+
+  // Branches filtered by selected zone (and company)
+  const visibleBranches = useMemo(() => {
+    const baseBranches = allBranches.filter(
+      (b) =>
+        accessibleCompanyIds === null ||
+        accessibleCompanyIds.includes(b.companyId),
+    );
+    if (zoneFilter) return baseBranches.filter((b) => b.zoneId === zoneFilter);
+    if (companyFilter)
+      return baseBranches.filter((b) => b.companyId === companyFilter);
+    return baseBranches;
+  }, [allBranches, accessibleCompanyIds, zoneFilter, companyFilter]);
+
+  // Farms filtered by company/zone/branch cascades
+  const visibleFarms = useMemo(() => {
+    if (branchFilter)
+      return accessibleFarms.filter((f) => f.branchId === branchFilter);
+    if (zoneFilter)
+      return accessibleFarms.filter((f) => f.zoneId === zoneFilter);
+    if (companyFilter)
+      return accessibleFarms.filter((f) => f.companyId === companyFilter);
+    return accessibleFarms;
+  }, [accessibleFarms, companyFilter, zoneFilter, branchFilter]);
+
+  // Farmers visible to current user
+  const farmerUsers = allUsers.filter(
+    (u) =>
+      u.role === "Farmer" &&
+      (accessibleFarmIds === null ||
+        (u.assignedFarmIds || []).some((fid) =>
+          accessibleFarmIds.includes(fid),
+        )),
+  );
+
+  // Effective farm IDs after all filters
+  const effectiveFarmIds: string[] | null = useMemo(() => {
+    const baseIds = visibleFarms.map((f) => f.id);
+    if (farmerFilter) {
+      const farmer = allUsers.find((u) => u.id === farmerFilter);
+      const farmerFarms = farmer?.assignedFarmIds || [];
+      return farmerFarms.filter((fid) => baseIds.includes(fid));
+    }
+    if (farmFilter) {
+      return baseIds.includes(farmFilter) ? [farmFilter] : [];
+    }
+    if (
+      accessibleFarmIds === null &&
+      !companyFilter &&
+      !zoneFilter &&
+      !branchFilter
+    )
+      return null;
+    return baseIds;
+  }, [
+    visibleFarms,
+    farmerFilter,
+    farmFilter,
+    allUsers,
+    accessibleFarmIds,
+    companyFilter,
+    zoneFilter,
+    branchFilter,
+  ]);
+
+  const batches =
+    effectiveFarmIds === null
+      ? allBatches
+      : allBatches.filter((b) => effectiveFarmIds.includes(b.farmId));
+  const farms =
+    effectiveFarmIds === null
+      ? allFarms
+      : allFarms.filter((f) => effectiveFarmIds.includes(f.id));
+  const batchIds = new Set(batches.map((b) => b.id));
+  const dailyEntries = allDailyEntries.filter((e) => batchIds.has(e.batchId));
+  const birdSales =
+    effectiveFarmIds === null
+      ? allBirdSales
+      : allBirdSales.filter((s) => effectiveFarmIds.includes(s.farmId));
+  const payments =
+    effectiveFarmIds === null
+      ? allPayments
+      : allPayments.filter((p) => effectiveFarmIds.includes(p.farmId));
+  const receipts =
+    effectiveFarmIds === null
+      ? allReceipts
+      : allReceipts.filter((r) => effectiveFarmIds.includes(r.farmId));
 
   const dailyRows = (
     batchFilter
@@ -160,20 +298,28 @@ export default function Reports() {
         (!dateFrom || e.entryDate >= dateFrom) &&
         (!dateTo || e.entryDate <= dateTo),
     )
-    .map((e) => ({
-      Date: e.entryDate,
-      Batch: batches.find((b) => b.id === e.batchId)?.batchNumber || "-",
-      "Birds Alive": e.birdsAlive,
-      Mortality: e.mortalityCount,
-      "Cull Birds": e.cullBirds,
-      "Feed (g)": e.feedIntakeGrams,
-      "Weight (g)": e.bodyWeightGrams,
-      FCR: e.fcr,
-      "Mortality%": e.mortalityPct,
-      Medicine: e.medicineUsed || "-",
-      Vaccine: e.vaccineUsed || "-",
-      Remarks: e.remarks || "-",
-    }));
+    .map((e) => {
+      const batch = allBatches.find((b) => b.id === e.batchId);
+      const farm = allFarms.find((f) => f.id === batch?.farmId);
+      return {
+        Date: e.entryDate,
+        Company: lookupName(farm?.companyId, allCompanies),
+        Zone: lookupName(farm?.zoneId, allZones),
+        Branch: lookupName(farm?.branchId, allBranches),
+        Farm: farm?.name ?? "-",
+        Batch: batch?.batchNumber ?? "-",
+        "Birds Alive": e.birdsAlive,
+        Mortality: e.mortalityCount,
+        "Cull Birds": e.cullBirds,
+        "Feed (g)": e.feedIntakeGrams,
+        "Weight (g)": e.bodyWeightGrams,
+        FCR: e.fcr,
+        "Mortality%": e.mortalityPct,
+        Medicine: e.medicineUsed ?? "-",
+        Vaccine: e.vaccineUsed ?? "-",
+        Remarks: e.remarks ?? "-",
+      };
+    });
 
   const mortalityRows = dailyEntries
     .filter(
@@ -181,27 +327,35 @@ export default function Reports() {
         (!dateFrom || e.entryDate >= dateFrom) &&
         (!dateTo || e.entryDate <= dateTo),
     )
-    .map((e) => ({
-      Date: e.entryDate,
-      Batch: batches.find((b) => b.id === e.batchId)?.batchNumber || "-",
-      Farm:
-        farms.find(
-          (f) => f.id === batches.find((b) => b.id === e.batchId)?.farmId,
-        )?.name || "-",
-      Mortality: e.mortalityCount,
-      "Cull Birds": e.cullBirds,
-      "Total Dead": e.mortalityCount + e.cullBirds,
-      "Mortality%": e.mortalityPct,
-    }));
+    .map((e) => {
+      const batch = allBatches.find((b) => b.id === e.batchId);
+      const farm = allFarms.find((f) => f.id === batch?.farmId);
+      return {
+        Date: e.entryDate,
+        Company: lookupName(farm?.companyId, allCompanies),
+        Zone: lookupName(farm?.zoneId, allZones),
+        Branch: lookupName(farm?.branchId, allBranches),
+        Farm: farm?.name ?? "-",
+        Batch: batch?.batchNumber ?? "-",
+        Mortality: e.mortalityCount,
+        "Cull Birds": e.cullBirds,
+        "Total Dead": e.mortalityCount + e.cullBirds,
+        "Mortality%": e.mortalityPct,
+      };
+    });
 
   const fcrRows = batches.map((b) => {
     const ents = dailyEntries.filter((e) => e.batchId === b.id);
     const avgFCR = ents.length
       ? (ents.reduce((s, e) => s + e.fcr, 0) / ents.length).toFixed(2)
       : "N/A";
+    const farm = allFarms.find((f) => f.id === b.farmId);
     return {
       Batch: b.batchNumber,
-      Farm: farms.find((f) => f.id === b.farmId)?.name || "-",
+      Company: lookupName(farm?.companyId, allCompanies),
+      Zone: lookupName(farm?.zoneId, allZones),
+      Branch: lookupName(farm?.branchId, allBranches),
+      Farm: farm?.name ?? "-",
       "Chicks Placed": b.chicksQty,
       "Birds Alive": b.birdsAlive,
       "Avg FCR": avgFCR,
@@ -215,13 +369,21 @@ export default function Reports() {
         (!dateFrom || e.entryDate >= dateFrom) &&
         (!dateTo || e.entryDate <= dateTo),
     )
-    .map((e) => ({
-      Date: e.entryDate,
-      Batch: batches.find((b) => b.id === e.batchId)?.batchNumber || "-",
-      "Feed Intake (g)": e.feedIntakeGrams,
-      "Cumulative Feed (g)": e.cumulativeFeed,
-      "Water (L)": e.waterConsumptionLiters,
-    }));
+    .map((e) => {
+      const batch = allBatches.find((b) => b.id === e.batchId);
+      const farm = allFarms.find((f) => f.id === batch?.farmId);
+      return {
+        Date: e.entryDate,
+        Company: lookupName(farm?.companyId, allCompanies),
+        Zone: lookupName(farm?.zoneId, allZones),
+        Branch: lookupName(farm?.branchId, allBranches),
+        Farm: farm?.name ?? "-",
+        Batch: batch?.batchNumber ?? "-",
+        "Feed Intake (g)": e.feedIntakeGrams,
+        "Cumulative Feed (g)": e.cumulativeFeed,
+        "Water (L)": e.waterConsumptionLiters,
+      };
+    });
 
   const feedPurchaseRows = feedPurchases
     .filter(
@@ -236,7 +398,7 @@ export default function Reports() {
       Bags: p.quantityBags,
       "Rate/Bag": p.ratePerBag,
       Discount: p.discountAmount,
-      "Total PKR": p.totalAmount,
+      "Total ₹": p.totalAmount,
     }));
 
   const chicksRows = batches
@@ -245,17 +407,23 @@ export default function Reports() {
         (!dateFrom || b.placementDate >= dateFrom) &&
         (!dateTo || b.placementDate <= dateTo),
     )
-    .map((b) => ({
-      Date: b.placementDate,
-      Batch: b.batchNumber,
-      Farm: farms.find((f) => f.id === b.farmId)?.name || "-",
-      Hatchery: b.hatcheryName,
-      Breed: b.breedType,
-      "Chicks Qty": b.chicksQty,
-      "Chicks Rate": b.chicksRate,
-      Transport: b.transportCost,
-      "Total Cost PKR": b.totalPlacementCost,
-    }));
+    .map((b) => {
+      const farm = allFarms.find((f) => f.id === b.farmId);
+      return {
+        Date: b.placementDate,
+        Company: lookupName(farm?.companyId, allCompanies),
+        Zone: lookupName(farm?.zoneId, allZones),
+        Branch: lookupName(farm?.branchId, allBranches),
+        Farm: farm?.name ?? "-",
+        Batch: b.batchNumber,
+        Hatchery: b.hatcheryName,
+        Breed: b.breedType,
+        "Chicks Qty": b.chicksQty,
+        "Chicks Rate": b.chicksRate,
+        Transport: b.transportCost,
+        "Total Cost ₹": b.totalPlacementCost,
+      };
+    });
 
   const salesRows = birdSales
     .filter(
@@ -263,65 +431,225 @@ export default function Reports() {
         (!dateFrom || s.dispatchDate >= dateFrom) &&
         (!dateTo || s.dispatchDate <= dateTo),
     )
-    .map((s) => ({
-      Date: s.dispatchDate,
-      Batch: batches.find((b) => b.id === s.batchId)?.batchNumber || "-",
-      Farm: farms.find((f) => f.id === s.farmId)?.name || "-",
-      "Birds Qty": s.birdsQty,
-      "Avg Wt(kg)": s.avgWeightKg,
-      "Rate/kg": s.ratePerKg,
-      "Total Wt(kg)": s.totalWeightKg,
-      "Amount PKR": s.totalAmount,
-      Trader: s.traderName,
-      Vehicle: s.vehicleNumber,
-    }));
+    .map((s) => {
+      const farm = allFarms.find((f) => f.id === s.farmId);
+      return {
+        Date: s.dispatchDate,
+        Company: lookupName(farm?.companyId, allCompanies),
+        Zone: lookupName(farm?.zoneId, allZones),
+        Branch: lookupName(farm?.branchId, allBranches),
+        Farm: farm?.name ?? "-",
+        Batch: allBatches.find((b) => b.id === s.batchId)?.batchNumber ?? "-",
+        "Birds Qty": s.birdsQty,
+        "Avg Wt(kg)": s.avgWeightKg,
+        "Rate/kg": s.ratePerKg,
+        "Total Wt(kg)": s.totalWeightKg,
+        "Amount ₹": s.totalAmount,
+        Trader: s.traderName,
+        Vehicle: s.vehicleNumber,
+      };
+    });
 
   const paymentRows = payments
     .filter(
       (p) => (!dateFrom || p.date >= dateFrom) && (!dateTo || p.date <= dateTo),
     )
-    .map((p) => ({
-      Date: p.date,
-      Farm: farms.find((f) => f.id === p.farmId)?.name || "-",
-      "Amount PKR": p.amount,
-      Type: p.paymentType,
-      Description: p.description || "-",
-      "Entered By": p.enteredBy || "-",
-    }));
+    .map((p) => {
+      const farm = allFarms.find((f) => f.id === p.farmId);
+      return {
+        Date: p.date,
+        Company: lookupName(farm?.companyId, allCompanies),
+        Zone: lookupName(farm?.zoneId, allZones),
+        Branch: lookupName(farm?.branchId, allBranches),
+        Farm: farm?.name ?? "-",
+        "Amount ₹": p.amount,
+        Type: p.paymentType,
+        Description: p.description ?? "-",
+        "Entered By": p.enteredBy ?? "-",
+      };
+    });
 
   const receiptRows = receipts
     .filter(
       (r) => (!dateFrom || r.date >= dateFrom) && (!dateTo || r.date <= dateTo),
     )
-    .map((r) => ({
-      Date: r.date,
-      Farm: farms.find((f) => f.id === r.farmId)?.name || "-",
-      "Amount PKR": r.amount,
-      Type: r.paymentType,
-      Notes: r.notes || "-",
-      "Entered By": r.enteredBy || "-",
-    }));
+    .map((r) => {
+      const farm = allFarms.find((f) => f.id === r.farmId);
+      return {
+        Date: r.date,
+        Company: lookupName(farm?.companyId, allCompanies),
+        Zone: lookupName(farm?.zoneId, allZones),
+        Branch: lookupName(farm?.branchId, allBranches),
+        Farm: farm?.name ?? "-",
+        "Amount ₹": r.amount,
+        Type: r.paymentType,
+        Notes: r.notes ?? "-",
+        "Entered By": r.enteredBy ?? "-",
+      };
+    });
 
-  const financialSummaryRows = farms.map((f) => {
-    const farmPayments = payments
-      .filter((p) => p.farmId === f.id)
-      .reduce((s, p) => s + p.amount, 0);
-    const farmReceipts = receipts
-      .filter((r) => r.farmId === f.id)
-      .reduce((s, r) => s + r.amount, 0);
-    return {
+  // Financial summary: company-level aggregation when no specific farm selected
+  const financialSummaryRows = useMemo(() => {
+    const targetFarms = effectiveFarmIds === null ? allFarms : farms;
+
+    if (farmFilter) {
+      return targetFarms.map((f) => ({
+        Company: lookupName(f.companyId, allCompanies),
+        Zone: lookupName(f.zoneId, allZones),
+        Branch: lookupName(f.branchId, allBranches),
+        Farm: f.name,
+        "Total Payments ₹": payments
+          .filter((p) => p.farmId === f.id)
+          .reduce((s, p) => s + p.amount, 0),
+        "Total Receipts ₹": receipts
+          .filter((r) => r.farmId === f.id)
+          .reduce((s, r) => s + r.amount, 0),
+        "Net Balance ₹":
+          receipts
+            .filter((r) => r.farmId === f.id)
+            .reduce((s, r) => s + r.amount, 0) -
+          payments
+            .filter((p) => p.farmId === f.id)
+            .reduce((s, p) => s + p.amount, 0),
+      }));
+    }
+
+    // Aggregate by company when no zone/branch filter
+    if (!zoneFilter && !branchFilter) {
+      const companiesForSummary: Company[] =
+        effectiveFarmIds === null ? allCompanies : visibleCompanies;
+      const rows: Row[] = [];
+      for (const c of companiesForSummary) {
+        const cFarms = targetFarms.filter((f) => f.companyId === c.id);
+        if (!cFarms.length) continue;
+        const fp = payments
+          .filter((p) => cFarms.some((f) => f.id === p.farmId))
+          .reduce((s, p) => s + p.amount, 0);
+        const fr = receipts
+          .filter((r) => cFarms.some((f) => f.id === r.farmId))
+          .reduce((s, r) => s + r.amount, 0);
+        rows.push({
+          Level: "Company",
+          Name: c.name,
+          "Total Payments ₹": fp,
+          "Total Receipts ₹": fr,
+          "Net Balance ₹": fr - fp,
+        });
+      }
+      if (rows.length) return rows;
+    }
+
+    // Aggregate by zone when zone filter applied
+    if (zoneFilter && !branchFilter) {
+      const zoneList: Zone[] = allZones.filter((z) => z.id === zoneFilter);
+      const rows: Row[] = [];
+      for (const z of zoneList) {
+        const zFarms = targetFarms.filter((f) => f.zoneId === z.id);
+        if (!zFarms.length) continue;
+        const fp = payments
+          .filter((p) => zFarms.some((f) => f.id === p.farmId))
+          .reduce((s, p) => s + p.amount, 0);
+        const fr = receipts
+          .filter((r) => zFarms.some((f) => f.id === r.farmId))
+          .reduce((s, r) => s + r.amount, 0);
+        rows.push({
+          Level: "Zone",
+          Name: z.name,
+          "Total Payments ₹": fp,
+          "Total Receipts ₹": fr,
+          "Net Balance ₹": fr - fp,
+        });
+      }
+      if (rows.length) return rows;
+    }
+
+    // Aggregate by branch when branch filter applied
+    if (branchFilter) {
+      const branchList: Branch[] = allBranches.filter(
+        (b) => b.id === branchFilter,
+      );
+      const rows: Row[] = [];
+      for (const br of branchList) {
+        const bFarms = targetFarms.filter((f) => f.branchId === br.id);
+        if (!bFarms.length) continue;
+        const fp = payments
+          .filter((p) => bFarms.some((f) => f.id === p.farmId))
+          .reduce((s, p) => s + p.amount, 0);
+        const fr = receipts
+          .filter((r) => bFarms.some((f) => f.id === r.farmId))
+          .reduce((s, r) => s + r.amount, 0);
+        rows.push({
+          Level: "Branch",
+          Name: br.name,
+          "Total Payments ₹": fp,
+          "Total Receipts ₹": fr,
+          "Net Balance ₹": fr - fp,
+        });
+      }
+      if (rows.length) return rows;
+    }
+
+    // Fallback: per-farm
+    return targetFarms.map((f) => ({
+      Company: lookupName(f.companyId, allCompanies),
+      Zone: lookupName(f.zoneId, allZones),
+      Branch: lookupName(f.branchId, allBranches),
       Farm: f.name,
-      "Total Payments PKR": farmPayments,
-      "Total Receipts PKR": farmReceipts,
-      "Net Balance PKR": farmReceipts - farmPayments,
-    };
-  });
+      "Total Payments ₹": payments
+        .filter((p) => p.farmId === f.id)
+        .reduce((s, p) => s + p.amount, 0),
+      "Total Receipts ₹": receipts
+        .filter((r) => r.farmId === f.id)
+        .reduce((s, r) => s + r.amount, 0),
+      "Net Balance ₹":
+        receipts
+          .filter((r) => r.farmId === f.id)
+          .reduce((s, r) => s + r.amount, 0) -
+        payments
+          .filter((p) => p.farmId === f.id)
+          .reduce((s, p) => s + p.amount, 0),
+    }));
+  }, [
+    effectiveFarmIds,
+    farms,
+    allFarms,
+    farmFilter,
+    zoneFilter,
+    branchFilter,
+    payments,
+    receipts,
+    allCompanies,
+    allZones,
+    allBranches,
+    visibleCompanies,
+  ]);
+
+  const canFilterByFarmer = ["SuperAdmin", "CompanyAdmin", "Manager"].includes(
+    currentUser?.role ?? "",
+  );
+  const canFilterByCompany = currentUser?.role === "SuperAdmin";
+
+  const selectCls =
+    "h-9 rounded-md border border-input bg-background px-3 text-sm w-full";
+
+  function clearAll() {
+    setDateFrom("");
+    setDateTo("");
+    setBatchFilter("");
+    setCompanyFilter("");
+    setZoneFilter("");
+    setBranchFilter("");
+    setFarmFilter("");
+    setFarmerFilter("");
+  }
 
   return (
     <div className="space-y-6" data-ocid="reports.page">
       <h2 className="text-2xl font-bold">Reports</h2>
+
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-3">
+          {/* Row 1: Date range + Batch + Clear */}
           <div className="flex flex-wrap gap-4 items-end">
             <div>
               <Label>From Date</Label>
@@ -349,7 +677,7 @@ export default function Reports() {
                 data-ocid="reports.batch.select"
                 value={batchFilter}
                 onChange={(e) => setBatchFilter(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                className={selectCls}
               >
                 <option value="">All Batches</option>
                 {batches.map((b) => (
@@ -362,16 +690,162 @@ export default function Reports() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                setDateFrom("");
-                setDateTo("");
-                setBatchFilter("");
-              }}
+              onClick={clearAll}
               data-ocid="reports.clear.button"
             >
               Clear Filters
             </Button>
           </div>
+
+          {/* Row 2: Hierarchy filters Company > Zone > Branch > Farm > Farmer */}
+          <div className="flex flex-wrap gap-4 items-end">
+            {canFilterByCompany && (
+              <div className="min-w-[140px]">
+                <Label>Company</Label>
+                <select
+                  data-ocid="reports.company.select"
+                  value={companyFilter}
+                  onChange={(e) => {
+                    setCompanyFilter(e.target.value);
+                    setZoneFilter("");
+                    setBranchFilter("");
+                    setFarmFilter("");
+                    setFarmerFilter("");
+                  }}
+                  className={selectCls}
+                >
+                  <option value="">All Companies</option>
+                  {visibleCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {visibleZones.length > 0 && (
+              <div className="min-w-[140px]">
+                <Label>Zone</Label>
+                <select
+                  data-ocid="reports.zone.select"
+                  value={zoneFilter}
+                  onChange={(e) => {
+                    setZoneFilter(e.target.value);
+                    setBranchFilter("");
+                    setFarmFilter("");
+                    setFarmerFilter("");
+                  }}
+                  className={selectCls}
+                >
+                  <option value="">All Zones</option>
+                  {visibleZones.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {visibleBranches.length > 0 && (
+              <div className="min-w-[140px]">
+                <Label>Branch</Label>
+                <select
+                  data-ocid="reports.branch.select"
+                  value={branchFilter}
+                  onChange={(e) => {
+                    setBranchFilter(e.target.value);
+                    setFarmFilter("");
+                    setFarmerFilter("");
+                  }}
+                  className={selectCls}
+                >
+                  <option value="">All Branches</option>
+                  {visibleBranches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="min-w-[140px]">
+              <Label>Farm</Label>
+              <select
+                data-ocid="reports.farm.select"
+                value={farmFilter}
+                onChange={(e) => {
+                  setFarmFilter(e.target.value);
+                  setFarmerFilter("");
+                }}
+                className={selectCls}
+              >
+                <option value="">All Farms</option>
+                {visibleFarms.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {canFilterByFarmer && (
+              <div className="min-w-[140px]">
+                <Label>Farmer</Label>
+                <select
+                  data-ocid="reports.farmer.select"
+                  value={farmerFilter}
+                  onChange={(e) => {
+                    setFarmerFilter(e.target.value);
+                    setFarmFilter("");
+                  }}
+                  className={selectCls}
+                >
+                  <option value="">All Farmers</option>
+                  {farmerUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Active filter chips */}
+          {(companyFilter ||
+            zoneFilter ||
+            branchFilter ||
+            farmFilter ||
+            farmerFilter) && (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground pt-1">
+              <span className="font-medium text-foreground">Filtering by:</span>
+              {companyFilter && (
+                <span className="bg-muted px-2 py-0.5 rounded">
+                  Company: {lookupName(companyFilter, allCompanies)}
+                </span>
+              )}
+              {zoneFilter && (
+                <span className="bg-muted px-2 py-0.5 rounded">
+                  Zone: {lookupName(zoneFilter, allZones)}
+                </span>
+              )}
+              {branchFilter && (
+                <span className="bg-muted px-2 py-0.5 rounded">
+                  Branch: {lookupName(branchFilter, allBranches)}
+                </span>
+              )}
+              {farmFilter && (
+                <span className="bg-muted px-2 py-0.5 rounded">
+                  Farm: {lookupName(farmFilter, allFarms)}
+                </span>
+              )}
+              {farmerFilter && (
+                <span className="bg-muted px-2 py-0.5 rounded">
+                  Farmer:{" "}
+                  {allUsers.find((u) => u.id === farmerFilter)?.name ?? "-"}
+                </span>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

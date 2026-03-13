@@ -3,7 +3,9 @@ import type { User } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import {
   ArrowRightLeft,
+  BarChart3,
   Bird,
+  BookOpen,
   Building2,
   ChevronDown,
   ChevronRight,
@@ -18,7 +20,9 @@ import {
   Package,
   Receipt,
   ShoppingCart,
+  TrendingUp,
   User as UserIcon,
+  Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -73,8 +77,53 @@ const navItems: NavItem[] = [
       { label: "Receipts", to: "/finance/receipts", icon: Receipt },
     ],
   },
-  { label: "Bird Sales", to: "/sales", icon: DollarSign },
+  {
+    label: "Bird Sales",
+    to: "/sales",
+    icon: DollarSign,
+    roles: [
+      "SuperAdmin",
+      "CompanyAdmin",
+      "Manager",
+      "Supervisor",
+      "Farmer",
+      "Dealer",
+    ],
+  },
   { label: "Reports", to: "/reports", icon: FileBarChart },
+  {
+    label: "Performance Report",
+    to: "/performance-report",
+    icon: BarChart3,
+    roles: [
+      "SuperAdmin",
+      "CompanyAdmin",
+      "Manager",
+      "Supervisor",
+      "Farmer",
+      "Dealer",
+    ],
+  },
+  {
+    label: "Growing Charge",
+    icon: TrendingUp,
+    roles: ["SuperAdmin", "CompanyAdmin", "Manager", "Supervisor", "Farmer"],
+    children: [
+      { label: "GC Schemes", to: "/gc/schemes", icon: TrendingUp },
+      { label: "Production Book", to: "/gc/production", icon: BookOpen },
+      {
+        label: "GC Settlement Report",
+        to: "/gc/settlement-report",
+        icon: Receipt,
+      },
+    ],
+  },
+  {
+    label: "User Management",
+    to: "/users",
+    icon: Users,
+    roles: ["SuperAdmin", "CompanyAdmin"],
+  },
 ];
 
 function NavGroup({

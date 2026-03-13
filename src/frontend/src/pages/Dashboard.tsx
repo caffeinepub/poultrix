@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { filterByFarms, useAccessibleFarmIds } from "@/lib/roleFilter";
 import { storage } from "@/lib/storage";
 import {
   AlertTriangle,
@@ -25,15 +26,31 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
-  const batches = storage.getBatches();
-  const farms = storage.getFarms();
-  const dailyEntries = storage.getDailyEntries();
-  const feedStocks = storage.getFeedStocks();
-  const sales = storage.getBirdSales();
+  const accessibleFarmIds = useAccessibleFarmIds();
+
+  const allBatches = storage.getBatches();
+  const allFarms = storage.getFarms();
+  const allDailyEntries = storage.getDailyEntries();
+  const allFeedStocks = storage.getFeedStocks();
+  const allSales = storage.getBirdSales();
   const zones = storage.getZones();
   const branches = storage.getBranches();
-  const payments = storage.getPayments();
-  const receipts = storage.getReceipts();
+  const allPayments = storage.getPayments();
+  const allReceipts = storage.getReceipts();
+
+  const farms =
+    accessibleFarmIds === null
+      ? allFarms
+      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
+  const batches = allBatches.filter((b) =>
+    farms.some((f) => f.id === b.farmId),
+  );
+  const batchIds = new Set(batches.map((b) => b.id));
+  const dailyEntries = allDailyEntries.filter((e) => batchIds.has(e.batchId));
+  const sales = filterByFarms(allSales, accessibleFarmIds);
+  const payments = filterByFarms(allPayments, accessibleFarmIds);
+  const receipts = filterByFarms(allReceipts, accessibleFarmIds);
+  const feedStocks = filterByFarms(allFeedStocks, accessibleFarmIds);
 
   const totalBirds = useMemo(
     () =>
@@ -184,19 +201,19 @@ export default function Dashboard() {
     },
     {
       label: "Total Sales",
-      value: `PKR ${totalSales.toLocaleString()}`,
+      value: `₹ ${totalSales.toLocaleString()}`,
       icon: DollarSign,
       color: "text-green-600",
     },
     {
       label: "Total Payments",
-      value: `PKR ${totalPayments.toLocaleString()}`,
+      value: `₹ ${totalPayments.toLocaleString()}`,
       icon: DollarSign,
       color: "text-rose-600",
     },
     {
       label: "Total Receipts",
-      value: `PKR ${totalReceipts.toLocaleString()}`,
+      value: `₹ ${totalReceipts.toLocaleString()}`,
       icon: Receipt,
       color: "text-cyan-600",
     },
@@ -261,7 +278,7 @@ export default function Dashboard() {
                   {k.label}
                 </span>
               </div>
-              <p className="text-lg font-bold truncate">{k.value}</p>
+              <p className="text-lg font-bold">{k.value}</p>
             </CardContent>
           </Card>
         ))}
@@ -271,81 +288,59 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Mortality Trend (7 days)
-            </CardTitle>
+            <CardTitle className="text-sm">7-Day Mortality Trend</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={200}>
               <LineChart data={last7}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Line
                   type="monotone"
                   dataKey="mortality"
                   stroke="#ef4444"
                   strokeWidth={2}
-                  name="Deaths"
+                  dot={false}
                 />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Feed Consumption Trend (7 days)
+            <CardTitle className="text-sm">
+              Farm Performance (Birds Alive)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={last7}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={farmPerformance}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="feed" fill="#f59e0b" name="Feed (g)" />
+                <Bar dataKey="birdsAlive" fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {farmPerformance.length > 0 && (
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-base">
-                Farm Performance — Birds Alive
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={farmPerformance}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="birdsAlive" fill="#10b981" name="Birds Alive" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
         {zonePerformance.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Zone-wise Performance</CardTitle>
+              <CardTitle className="text-sm">Zone Performance</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={zonePerformance}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="birdsAlive" fill="#6366f1" name="Birds Alive" />
+                  <Bar dataKey="birdsAlive" fill="#6366f1" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -355,18 +350,16 @@ export default function Dashboard() {
         {branchPerformance.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">
-                Branch-wise Performance
-              </CardTitle>
+              <CardTitle className="text-sm">Branch Performance</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={branchPerformance}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="birdsAlive" fill="#0ea5e9" name="Birds Alive" />
+                  <Bar dataKey="birdsAlive" fill="#f59e0b" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -374,13 +367,32 @@ export default function Dashboard() {
         )}
       </div>
 
-      {batches.length === 0 && (
-        <Card data-ocid="dashboard.empty_state">
-          <CardContent className="p-8 text-center">
-            <Bird size={48} className="mx-auto text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">
-              No farm data yet. Start by adding a Farm, then place chicks.
-            </p>
+      {/* Active Farms Summary */}
+      {farms.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
+              Active Farms ({farms.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {farms.map((f) => {
+                const activeBatches = batches.filter(
+                  (b) => b.farmId === f.id && b.status === "active",
+                );
+                const birds = activeBatches.reduce(
+                  (s, b) => s + b.birdsAlive,
+                  0,
+                );
+                return (
+                  <Badge key={f.id} variant="outline" className="gap-1">
+                    <Bird size={12} />
+                    {f.name}: {birds.toLocaleString()} birds
+                  </Badge>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       )}

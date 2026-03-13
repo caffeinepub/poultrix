@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAccessibleFarmIds } from "@/lib/roleFilter";
 import { type Batch, storage } from "@/lib/storage";
 import { Bird, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -17,9 +18,19 @@ const statusColor = (s: string) =>
       : "bg-gray-100 text-gray-600";
 
 export default function ChicksPlacement() {
-  const farms = storage.getFarms();
+  const accessibleFarmIds = useAccessibleFarmIds();
+  const allFarms = storage.getFarms();
+  const farms =
+    accessibleFarmIds === null
+      ? allFarms
+      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
   const sheds = storage.getSheds();
-  const [batches, setBatches] = useState<Batch[]>(storage.getBatches());
+  const allBatches = storage.getBatches();
+  const [batches, setBatches] = useState<Batch[]>(
+    accessibleFarmIds === null
+      ? allBatches
+      : allBatches.filter((b) => accessibleFarmIds.includes(b.farmId)),
+  );
   const [form, setForm] = useState({
     farmId: "",
     shedId: "",
@@ -50,14 +61,19 @@ export default function ChicksPlacement() {
       placementDate: form.placementDate,
       hatcheryName: form.hatcheryName,
       breedType: form.breedType,
-      chicksQty: Number.parseInt(form.chicksQty),
+      chicksQty: Number.parseInt(form.chicksQty) || 0,
       chicksRate: Number.parseInt(form.chicksRate) || 0,
       transportCost: Number.parseInt(form.transportCost) || 0,
       totalPlacementCost: totalCost,
-      birdsAlive: Number.parseInt(form.chicksQty),
+      birdsAlive: Number.parseInt(form.chicksQty) || 0,
       status: "active",
     });
-    setBatches(storage.getBatches());
+    const updated = storage.getBatches();
+    setBatches(
+      accessibleFarmIds === null
+        ? updated
+        : updated.filter((b) => accessibleFarmIds.includes(b.farmId)),
+    );
     setForm({
       farmId: "",
       shedId: "",
@@ -73,198 +89,196 @@ export default function ChicksPlacement() {
   return (
     <div className="space-y-6" data-ocid="chicks.page">
       <h2 className="text-2xl font-bold">Chick Placement</h2>
-      <Card>
-        <CardContent className="p-6">
-          <h3 className="font-semibold mb-4">New Placement</h3>
-          <form
-            onSubmit={handleSubmit}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-          >
-            <div>
-              <Label>Farm *</Label>
-              <select
-                data-ocid="chicks.farm.select"
-                required
-                value={form.farmId}
-                onChange={(e) =>
-                  setForm({ ...form, farmId: e.target.value, shedId: "" })
-                }
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select Farm...</option>
-                {farms.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Shed *</Label>
-              <select
-                data-ocid="chicks.shed.select"
-                required
-                value={form.shedId}
-                onChange={(e) => setForm({ ...form, shedId: e.target.value })}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select Shed...</option>
-                {filteredSheds.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Placement Date</Label>
-              <Input
-                data-ocid="chicks.placement_date.input"
-                type="date"
-                value={form.placementDate}
-                onChange={(e) =>
-                  setForm({ ...form, placementDate: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <Label>Hatchery Name</Label>
-              <Input
-                data-ocid="chicks.hatchery.input"
-                value={form.hatcheryName}
-                onChange={(e) =>
-                  setForm({ ...form, hatcheryName: e.target.value })
-                }
-                placeholder="Hatchery"
-              />
-            </div>
-            <div>
-              <Label>Breed Type</Label>
-              <Input
-                data-ocid="chicks.breed.input"
-                value={form.breedType}
-                onChange={(e) =>
-                  setForm({ ...form, breedType: e.target.value })
-                }
-                placeholder="e.g. Ross 308"
-              />
-            </div>
-            <div>
-              <Label>Chicks Quantity *</Label>
-              <Input
-                data-ocid="chicks.qty.input"
-                required
-                type="number"
-                value={form.chicksQty}
-                onChange={(e) =>
-                  setForm({ ...form, chicksQty: e.target.value })
-                }
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <Label>Chicks Rate (PKR/chick)</Label>
-              <Input
-                data-ocid="chicks.rate.input"
-                type="number"
-                value={form.chicksRate}
-                onChange={(e) =>
-                  setForm({ ...form, chicksRate: e.target.value })
-                }
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <Label>Transport Cost (PKR)</Label>
-              <Input
-                data-ocid="chicks.transport.input"
-                type="number"
-                value={form.transportCost}
-                onChange={(e) =>
-                  setForm({ ...form, transportCost: e.target.value })
-                }
-                placeholder="0"
-              />
-            </div>
-            <div className="sm:col-span-2 p-3 bg-muted rounded-lg">
-              <span className="text-sm text-muted-foreground">
-                Total Placement Cost:{" "}
-              </span>
-              <span className="font-bold text-lg">
-                PKR {totalCost.toLocaleString()}
-              </span>
-            </div>
-            <div className="sm:col-span-2 flex justify-end">
-              <Button type="submit" data-ocid="chicks.submit.button">
-                <Plus size={16} className="mr-1" />
-                Place Chicks
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <div>
-        <h3 className="font-semibold mb-3">All Batches ({batches.length})</h3>
-        {batches.length === 0 ? (
-          <Card data-ocid="chicks.empty_state">
-            <CardContent className="p-8 text-center text-muted-foreground">
-              <Bird size={40} className="mx-auto mb-2" />
-              <p>No batches placed yet.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-ocid="chicks.batches.table">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-2">Batch#</th>
-                  <th className="text-left p-2">Farm</th>
-                  <th className="text-left p-2">Shed</th>
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-right p-2">Chicks</th>
-                  <th className="text-right p-2">Alive</th>
-                  <th className="text-right p-2">Cost</th>
-                  <th className="text-center p-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batches.map((b, i) => (
-                  <tr
-                    key={b.id}
-                    className="border-b hover:bg-muted/30"
-                    data-ocid={`chicks.batch.row.${i + 1}`}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>Farm *</Label>
+                  <select
+                    data-ocid="chicks.farm.select"
+                    value={form.farmId}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        farmId: e.target.value,
+                        shedId: "",
+                      }))
+                    }
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <td className="p-2 font-mono text-xs">{b.batchNumber}</td>
-                    <td className="p-2">
-                      {farms.find((f) => f.id === b.farmId)?.name || "-"}
-                    </td>
-                    <td className="p-2">
-                      {sheds.find((s) => s.id === b.shedId)?.name || "-"}
-                    </td>
-                    <td className="p-2">{b.placementDate}</td>
-                    <td className="p-2 text-right">
-                      {b.chicksQty.toLocaleString()}
-                    </td>
-                    <td className="p-2 text-right font-medium">
-                      {b.birdsAlive.toLocaleString()}
-                    </td>
-                    <td className="p-2 text-right">
-                      PKR {b.totalPlacementCost.toLocaleString()}
-                    </td>
-                    <td className="p-2 text-center">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusColor(b.status)}`}
+                    <option value="">Select Farm...</option>
+                    {farms.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <Label>Shed *</Label>
+                  <select
+                    data-ocid="chicks.shed.select"
+                    value={form.shedId}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, shedId: e.target.value }))
+                    }
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    disabled={!form.farmId}
+                  >
+                    <option value="">Select Shed...</option>
+                    {filteredSheds.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Placement Date</Label>
+                  <Input
+                    data-ocid="chicks.date.input"
+                    type="date"
+                    value={form.placementDate}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        placementDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Chicks Qty *</Label>
+                  <Input
+                    data-ocid="chicks.qty.input"
+                    type="number"
+                    value={form.chicksQty}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, chicksQty: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Chick Rate (₹)</Label>
+                  <Input
+                    data-ocid="chicks.rate.input"
+                    type="number"
+                    value={form.chicksRate}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, chicksRate: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Transport Cost</Label>
+                  <Input
+                    data-ocid="chicks.transport.input"
+                    type="number"
+                    value={form.transportCost}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        transportCost: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Hatchery Name</Label>
+                  <Input
+                    data-ocid="chicks.hatchery.input"
+                    value={form.hatcheryName}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        hatcheryName: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Breed Type</Label>
+                  <Input
+                    data-ocid="chicks.breed.input"
+                    value={form.breedType}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, breedType: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              {totalCost > 0 && (
+                <div className="p-3 bg-muted/50 rounded text-sm">
+                  Total Placement Cost:{" "}
+                  <strong>₹ {totalCost.toLocaleString()}</strong>
+                </div>
+              )}
+              <Button
+                type="submit"
+                className="w-full"
+                data-ocid="chicks.submit_button"
+              >
+                <Plus size={16} className="mr-1" /> Add Batch
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="font-semibold mb-3">Batches ({batches.length})</h3>
+            {batches.length === 0 ? (
+              <div
+                className="text-center text-muted-foreground py-8"
+                data-ocid="chicks.empty_state"
+              >
+                <Bird size={40} className="mx-auto mb-2" />
+                <p>No batches yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs" data-ocid="chicks.table">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-1">Batch</th>
+                      <th className="text-left p-1">Farm</th>
+                      <th className="text-right p-1">Placed</th>
+                      <th className="text-right p-1">Alive</th>
+                      <th className="text-right p-1">Rate</th>
+                      <th className="text-left p-1">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batches.map((b, i) => (
+                      <tr
+                        key={b.id}
+                        className="border-b hover:bg-muted/30"
+                        data-ocid={`chicks.row.${i + 1}`}
                       >
-                        {b.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <td className="p-1">{b.batchNumber}</td>
+                        <td className="p-1 text-muted-foreground">
+                          {farms.find((f) => f.id === b.farmId)?.name || "-"}
+                        </td>
+                        <td className="p-1 text-right">{b.chicksQty}</td>
+                        <td className="p-1 text-right">{b.birdsAlive}</td>
+                        <td className="p-1 text-right">₹ {b.chicksRate}</td>
+                        <td className="p-1">
+                          <span
+                            className={`text-xs px-1.5 py-0.5 rounded ${statusColor(b.status)}`}
+                          >
+                            {b.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
