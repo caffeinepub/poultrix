@@ -1,50 +1,89 @@
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAuth } from "@/context/AuthContext";
+import { storage } from "@/lib/storage";
 import type { User } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import {
   ArrowRightLeft,
   BarChart3,
+  Bell,
   Bird,
   BookOpen,
   Building2,
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  CreditCard,
   DollarSign,
   FileBarChart,
+  FileText,
   GitBranch,
   Globe,
+  IdCard,
   LayoutDashboard,
   LogOut,
   Menu,
   Package,
   Receipt,
+  Settings,
   ShoppingCart,
   TrendingUp,
+  Truck,
   User as UserIcon,
   Users,
+  Wheat,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-type NavChild = { label: string; to: string; icon: React.ElementType };
+type NavChild = {
+  label: string;
+  to: string;
+  icon: React.ElementType;
+  roles?: string[];
+};
 type NavItem = {
   label: string;
   icon: React.ElementType;
   to?: string;
   children?: NavChild[];
   roles?: User["role"][];
+  hideForStaff?: boolean;
 };
 
+const STAFF_ALLOWED_ROUTES = [
+  "/employee-dashboard",
+  "/dashboard",
+  "/daily-entry",
+  "/feed/issue",
+];
+
 const navItems: NavItem[] = [
+  { label: "My Profile", to: "/employee-dashboard", icon: IdCard },
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
+  {
+    label: "My Team",
+    to: "/my-team",
+    icon: Users,
+    roles: ["CompanyAdmin", "Dealer", "Farmer"],
+  },
   {
     label: "Company Structure",
     icon: Globe,
     roles: ["SuperAdmin", "CompanyAdmin"],
     children: [
-      { label: "Companies", to: "/companies", icon: Building2 },
+      {
+        label: "Companies",
+        to: "/companies",
+        icon: Building2,
+        roles: ["SuperAdmin"],
+      },
       { label: "Zones", to: "/zones", icon: Globe },
       { label: "Branches", to: "/branches", icon: GitBranch },
     ],
@@ -53,26 +92,119 @@ const navItems: NavItem[] = [
     label: "Farm Management",
     icon: Building2,
     children: [
-      { label: "Farms & Sheds", to: "/farms", icon: Building2 },
-      { label: "Chick Placement", to: "/chicks", icon: Bird },
+      {
+        label: "Farms & Sheds",
+        to: "/farms",
+        icon: Building2,
+        roles: [
+          "SuperAdmin",
+          "CompanyAdmin",
+          "Manager",
+          "Supervisor",
+          "Farmer",
+          "Dealer",
+        ],
+      },
+      {
+        label: "Chick Placement",
+        to: "/chicks",
+        icon: Bird,
+        roles: [
+          "SuperAdmin",
+          "CompanyAdmin",
+          "Manager",
+          "Supervisor",
+          "Farmer",
+        ],
+      },
       { label: "Daily Entry", to: "/daily-entry", icon: ClipboardList },
     ],
   },
   {
     label: "Feed Management",
     icon: Package,
-    roles: ["SuperAdmin", "CompanyAdmin", "Manager", "Supervisor"],
+    roles: [
+      "SuperAdmin",
+      "CompanyAdmin",
+      "Manager",
+      "Supervisor",
+      "Farmer",
+      "Dealer",
+      "Staff",
+    ],
     children: [
-      { label: "Feed Purchase", to: "/feed/purchase", icon: ShoppingCart },
-      { label: "Feed Stock", to: "/feed/stock", icon: Package },
+      {
+        label: "Feed Types",
+        to: "/feed/types",
+        icon: Wheat,
+        roles: ["SuperAdmin", "CompanyAdmin"],
+      },
+      {
+        label: "Feed Suppliers",
+        to: "/feed/suppliers",
+        icon: Truck,
+        roles: ["SuperAdmin", "CompanyAdmin"],
+      },
+      {
+        label: "Feed Purchase",
+        to: "/feed/purchase",
+        icon: ShoppingCart,
+        roles: [
+          "SuperAdmin",
+          "CompanyAdmin",
+          "Manager",
+          "Supervisor",
+          "Farmer",
+          "Dealer",
+        ],
+      },
+      {
+        label: "Feed Stock",
+        to: "/feed/stock",
+        icon: Package,
+        roles: [
+          "SuperAdmin",
+          "CompanyAdmin",
+          "Manager",
+          "Supervisor",
+          "Farmer",
+          "Dealer",
+        ],
+      },
       { label: "Feed Issue", to: "/feed/issue", icon: ArrowRightLeft },
+      {
+        label: "Feed Stock Reports",
+        to: "/feed/reports",
+        icon: FileBarChart,
+        roles: [
+          "SuperAdmin",
+          "CompanyAdmin",
+          "Manager",
+          "Supervisor",
+          "Farmer",
+          "Dealer",
+        ],
+      },
     ],
   },
   {
     label: "Finance",
     icon: DollarSign,
-    roles: ["SuperAdmin", "CompanyAdmin", "Manager"],
+    roles: ["SuperAdmin", "CompanyAdmin", "Manager", "Supervisor", "Farmer"],
     children: [
+      {
+        label: "Finance Dashboard",
+        to: "/finance/dashboard",
+        icon: LayoutDashboard,
+      },
+      { label: "Settlements", to: "/finance/settlements", icon: CheckSquare },
+      { label: "Farmer Ledger", to: "/finance/ledger", icon: BookOpen },
+      { label: "Expenses", to: "/finance/expenses", icon: Receipt },
+      {
+        label: "Settlement Report",
+        to: "/finance/settlement-report",
+        icon: FileText,
+      },
       { label: "Payments", to: "/finance/payments", icon: DollarSign },
       { label: "Receipts", to: "/finance/receipts", icon: Receipt },
     ],
@@ -90,7 +222,19 @@ const navItems: NavItem[] = [
       "Dealer",
     ],
   },
-  { label: "Reports", to: "/reports", icon: FileBarChart },
+  {
+    label: "Reports",
+    to: "/reports",
+    icon: FileBarChart,
+    roles: [
+      "SuperAdmin",
+      "CompanyAdmin",
+      "Manager",
+      "Supervisor",
+      "Farmer",
+      "Dealer",
+    ],
+  },
   {
     label: "Performance Report",
     to: "/performance-report",
@@ -119,10 +263,30 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    label: "Subscription & Billing",
+    icon: CreditCard,
+    roles: ["SuperAdmin"],
+    children: [
+      {
+        label: "Billing Dashboard",
+        to: "/billing/dashboard",
+        icon: LayoutDashboard,
+      },
+      {
+        label: "Manage Subscriptions",
+        to: "/billing/manage",
+        icon: Settings,
+        roles: ["SuperAdmin", "CompanyAdmin"],
+      },
+      { label: "Invoices", to: "/billing/invoices", icon: FileText },
+      { label: "Payments", to: "/billing/payments", icon: CreditCard },
+    ],
+  },
+  {
     label: "User Management",
     to: "/users",
     icon: Users,
-    roles: ["SuperAdmin", "CompanyAdmin"],
+    roles: ["SuperAdmin"],
   },
 ];
 
@@ -142,6 +306,10 @@ function NavGroup({
   const [open, setOpen] = useState(isActive ?? false);
 
   if (item.roles && role && !item.roles.includes(role)) return null;
+
+  // Staff only sees specific routes
+  if (role === "Staff" && item.to && !STAFF_ALLOWED_ROUTES.includes(item.to))
+    return null;
 
   if (!item.children) {
     return (
@@ -164,6 +332,15 @@ function NavGroup({
     );
   }
 
+  // Filter children for Staff and role-based access
+  const visibleChildren = item.children.filter((c) => {
+    if (c.roles && role && !c.roles.includes(role)) return false;
+    if (role === "Staff" && !STAFF_ALLOWED_ROUTES.includes(c.to)) return false;
+    return true;
+  });
+
+  if (visibleChildren.length === 0) return null;
+
   return (
     <div>
       <button
@@ -182,7 +359,7 @@ function NavGroup({
       </button>
       {open && (
         <div className="ml-4 mt-1 space-y-1">
-          {item.children.map((c) => (
+          {visibleChildren.map((c) => (
             <NavLink
               key={c.to}
               to={c.to}
@@ -207,6 +384,134 @@ function NavGroup({
   );
 }
 
+function NotificationBell({
+  userId,
+  companyId,
+}: { userId: string; companyId?: string }) {
+  const [open, setOpen] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  // Combine general notifications and subscription notifications
+  const generalNotifs = storage
+    .getNotifications()
+    .filter(
+      (n) =>
+        (n.userId === userId || n.userId === "all") &&
+        (!n.companyId || !companyId || n.companyId === companyId),
+    );
+
+  const subNotifs = storage
+    .getSubscriptionNotifications()
+    .filter((n) => n.userId === userId);
+
+  const allUnread = [
+    ...generalNotifs
+      .filter((n) => !n.read)
+      .map((n) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        time: new Date(n.createdAt).toLocaleDateString(),
+        read: n.read,
+        source: "general" as const,
+      })),
+    ...subNotifs
+      .filter((n) => !n.read)
+      .map((n) => ({
+        id: n.id,
+        title: "Subscription",
+        message: n.message,
+        time: n.date,
+        read: n.read,
+        source: "sub" as const,
+      })),
+  ];
+
+  const unreadCount = allUnread.length;
+
+  function handleMarkAll() {
+    storage.markAllNotificationsRead(userId);
+    setTick((t) => t + 1);
+  }
+
+  function handleMarkOne(id: string) {
+    storage.markNotificationRead(id);
+    setTick((t) => t + 1);
+  }
+
+  // Re-read on tick change for reactivity
+  const _ = tick;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="relative p-1.5 rounded-lg hover:bg-muted transition-colors"
+          data-ocid="notifications.bell_button"
+          aria-label="Notifications"
+        >
+          <Bell size={18} className="text-muted-foreground" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-80 p-0"
+        data-ocid="notifications.panel"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <p className="font-semibold text-sm">Notifications</p>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline"
+              onClick={handleMarkAll}
+              data-ocid="notifications.mark_all_button"
+            >
+              Mark all as read
+            </button>
+          )}
+        </div>
+        <div className="max-h-96 overflow-y-auto">
+          {allUnread.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              No new notifications
+            </p>
+          ) : (
+            allUnread.map((n, idx) => (
+              <button
+                key={n.id}
+                type="button"
+                className="w-full text-left px-4 py-3 border-b last:border-0 hover:bg-muted/40"
+                onClick={() => handleMarkOne(n.id)}
+                data-ocid={`notifications.item.${idx + 1}`}
+              >
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{n.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {n.message}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {n.time}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { currentUser, logout } = useAuth();
@@ -216,6 +521,35 @@ export default function Layout() {
     logout();
     navigate("/login");
   };
+
+  // Determine firm name to show in header based on role
+  const firmLabel = useMemo(() => {
+    if (!currentUser) return null;
+    if (currentUser.role === "SuperAdmin") return null;
+    if (currentUser.companyId) {
+      const company = storage
+        .getCompanies()
+        .find((c) => c.id === currentUser.companyId);
+      if (company) {
+        if (currentUser.role === "CompanyAdmin")
+          return { label: "Company", name: company.name };
+        if (currentUser.role === "Dealer")
+          return { label: "Dealer", name: company.name };
+        if (currentUser.role === "Farmer") {
+          const farm = storage
+            .getFarms()
+            .find(
+              (f) =>
+                f.companyId === currentUser.companyId &&
+                currentUser.assignedFarmIds?.[0] === f.id,
+            );
+          return { label: "Farm", name: farm?.name ?? company.name };
+        }
+        return { label: "Company", name: company.name };
+      }
+    }
+    return null;
+  }, [currentUser]);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -299,15 +633,34 @@ export default function Layout() {
           >
             <Menu size={22} />
           </button>
-          <h1 className="font-semibold text-foreground flex-1">
-            Poultrix Farm Management
-          </h1>
-          <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-            <UserIcon size={14} />
-            <span>{currentUser?.name}</span>
-            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-              {currentUser?.role}
-            </span>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-semibold text-foreground leading-tight">
+              Poultrix Dashboard
+            </h1>
+            {firmLabel && (
+              <p className="text-xs text-muted-foreground leading-tight truncate">
+                {firmLabel.label}:{" "}
+                <span className="font-bold text-sm text-primary">
+                  {firmLabel.name}
+                </span>
+                &nbsp;|&nbsp;{currentUser?.name} ({currentUser?.role})
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {currentUser && (
+              <NotificationBell
+                userId={currentUser.id}
+                companyId={currentUser.companyId}
+              />
+            )}
+            <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+              <UserIcon size={14} />
+              <span>{currentUser?.name}</span>
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                {currentUser?.role}
+              </span>
+            </div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-6">

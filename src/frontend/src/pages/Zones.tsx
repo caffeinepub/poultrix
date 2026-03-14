@@ -2,26 +2,45 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/context/AuthContext";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type Zone, storage } from "@/lib/storage";
 import { Globe, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export default function Zones() {
-  const [zones, setZones] = useState<Zone[]>(storage.getZones());
+  const { currentUser: _currentUser } = useAuth();
+  const {
+    zones: scopedZones,
+    companyId: myCompanyId,
+    isSuperAdmin,
+  } = useCompanyScope();
+  const [zones, setZones] = useState<Zone[]>(scopedZones);
   const companies = storage.getCompanies();
-  const [form, setForm] = useState({ companyId: "", name: "" });
+  const [form, setForm] = useState({ companyId: myCompanyId || "", name: "" });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.companyId) return;
-    storage.addZone({ companyId: form.companyId, name: form.name.trim() });
-    setZones(storage.getZones());
+    const zoneCompanyId = isSuperAdmin
+      ? form.companyId
+      : myCompanyId || form.companyId;
+    if (!form.name.trim() || !zoneCompanyId) return;
+    storage.addZone({ companyId: zoneCompanyId, name: form.name.trim() });
+    setZones(
+      isSuperAdmin
+        ? storage.getZones()
+        : storage.getZonesByCompany(myCompanyId),
+    );
     setForm({ ...form, name: "" });
   };
 
   const handleDelete = (id: string) => {
     storage.deleteZone(id);
-    setZones(storage.getZones());
+    setZones(
+      isSuperAdmin
+        ? storage.getZones()
+        : storage.getZonesByCompany(myCompanyId),
+    );
   };
 
   return (
@@ -35,25 +54,27 @@ export default function Zones() {
             onSubmit={handleSubmit}
             className="grid grid-cols-1 sm:grid-cols-3 gap-4"
           >
-            <div>
-              <Label>Company *</Label>
-              <select
-                data-ocid="zones.company.select"
-                required
-                value={form.companyId}
-                onChange={(e) =>
-                  setForm({ ...form, companyId: e.target.value })
-                }
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select Company...</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {isSuperAdmin && (
+              <div>
+                <Label>Company *</Label>
+                <select
+                  data-ocid="zones.company.select"
+                  required
+                  value={form.companyId}
+                  onChange={(e) =>
+                    setForm({ ...form, companyId: e.target.value })
+                  }
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select Company...</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <Label>Zone Name *</Label>
               <Input

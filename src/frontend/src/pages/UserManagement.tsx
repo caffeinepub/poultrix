@@ -12,9 +12,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
-import { type User, storage } from "@/lib/storage";
-import { Pencil, Plus, Trash2, UserCheck, UserX } from "lucide-react";
+import { useCompanyScope } from "@/lib/roleFilter";
+import { type Branch, type User, storage } from "@/lib/storage";
+import {
+  GitBranch,
+  Pencil,
+  Plus,
+  Trash2,
+  UserCheck,
+  UserX,
+} from "lucide-react";
 import { useState } from "react";
 
 type FormState = {
@@ -23,11 +32,23 @@ type FormState = {
   password: string;
   role: User["role"];
   companyId: string;
+  mobileNumber: string;
+  email: string;
+  assignedArea: string;
   assignedFarmIds: string[];
   assignedZoneIds: string[];
   assignedBranchIds: string[];
   assignedShedId: string;
   active: boolean;
+};
+
+type BranchFormState = {
+  name: string;
+  companyId: string;
+  zoneId: string;
+  address: string;
+  branchManagerId: string;
+  contactNumber: string;
 };
 
 const emptyForm = (): FormState => ({
@@ -36,6 +57,9 @@ const emptyForm = (): FormState => ({
   password: "",
   role: "Farmer",
   companyId: "",
+  mobileNumber: "",
+  email: "",
+  assignedArea: "",
   assignedFarmIds: [],
   assignedZoneIds: [],
   assignedBranchIds: [],
@@ -43,13 +67,37 @@ const emptyForm = (): FormState => ({
   active: true,
 });
 
+const emptyBranchForm = (): BranchFormState => ({
+  name: "",
+  companyId: "",
+  zoneId: "",
+  address: "",
+  branchManagerId: "",
+  contactNumber: "",
+});
+
 export default function UserManagement() {
   const { currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>(() => storage.getUsers());
+  const {
+    users: scopedUsers,
+    branches: scopedBranches,
+    companyId: _myCompanyId,
+  } = useCompanyScope();
+  const [users, setUsers] = useState<User[]>(() => scopedUsers);
+  const [branches, setBranches] = useState<Branch[]>(() => scopedBranches);
   const [dialog, setDialog] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const [branchDialog, setBranchDialog] = useState(false);
+  const [branchEditId, setBranchEditId] = useState<string | null>(null);
+  const [branchForm, setBranchForm] = useState<BranchFormState>(
+    emptyBranchForm(),
+  );
+  const [confirmDeleteBranch, setConfirmDeleteBranch] = useState<string | null>(
+    null,
+  );
 
   const companies = storage.getCompanies();
   const allZones = storage.getZones();
@@ -62,8 +110,7 @@ export default function UserManagement() {
 
   const visibleUsers = users.filter((u) => {
     if (isSuperAdmin) return true;
-    if (isCompanyAdmin)
-      return u.companyId === currentUser?.companyId || u.id === currentUser?.id;
+    if (isCompanyAdmin) return u.companyId === currentUser?.companyId;
     return false;
   });
 
@@ -85,18 +132,19 @@ export default function UserManagement() {
       filteredFarms.some((f) => f.id === s.farmId),
   );
 
-  const availableRoles: User["role"][] = isSuperAdmin
-    ? [
-        "SuperAdmin",
-        "CompanyAdmin",
-        "Manager",
-        "Supervisor",
-        "Farmer",
-        "Dealer",
-        "Staff",
-      ]
-    : ["CompanyAdmin", "Manager", "Supervisor", "Farmer", "Dealer", "Staff"];
+  const managerUsers = users.filter(
+    (u) =>
+      u.role === "Manager" &&
+      (isSuperAdmin || u.companyId === currentUser?.companyId),
+  );
 
+  const availableRoles: User["role"][] = isSuperAdmin
+    ? ["CompanyAdmin", "Dealer", "Farmer"]
+    : isCompanyAdmin
+      ? ["Manager", "Supervisor", "Staff"]
+      : [];
+
+  // --- User dialog ---
   const openAdd = () => {
     setEditId(null);
     setForm(emptyForm());
@@ -111,6 +159,9 @@ export default function UserManagement() {
       password: "",
       role: u.role,
       companyId: u.companyId || "",
+      mobileNumber: u.mobileNumber || "",
+      email: u.email || "",
+      assignedArea: u.assignedArea || "",
       assignedFarmIds: u.assignedFarmIds || [],
       assignedZoneIds: u.assignedZoneIds || [],
       assignedBranchIds: u.assignedBranchIds || [],
@@ -131,6 +182,9 @@ export default function UserManagement() {
         username: form.username,
         role: form.role,
         companyId,
+        mobileNumber: form.mobileNumber || undefined,
+        email: form.email || undefined,
+        assignedArea: form.assignedArea || undefined,
         assignedFarmIds: form.assignedFarmIds,
         assignedZoneIds: form.assignedZoneIds,
         assignedBranchIds: form.assignedBranchIds,
@@ -147,6 +201,9 @@ export default function UserManagement() {
         password: form.password,
         role: form.role,
         companyId,
+        mobileNumber: form.mobileNumber || undefined,
+        email: form.email || undefined,
+        assignedArea: form.assignedArea || undefined,
         assignedFarmIds: form.assignedFarmIds,
         assignedZoneIds: form.assignedZoneIds,
         assignedBranchIds: form.assignedBranchIds,
@@ -154,18 +211,18 @@ export default function UserManagement() {
         active: form.active,
       });
     }
-    setUsers(storage.getUsers());
+    setUsers(scopedUsers);
     setDialog(false);
   };
 
   const toggleActive = (u: User) => {
     storage.updateUser(u.id, { active: !(u.active === false) });
-    setUsers(storage.getUsers());
+    setUsers(scopedUsers);
   };
 
   const doDelete = (id: string) => {
     storage.deleteUser(id);
-    setUsers(storage.getUsers());
+    setUsers(scopedUsers);
     setConfirmDelete(null);
   };
 
@@ -194,6 +251,60 @@ export default function UserManagement() {
     }));
   };
 
+  // --- Branch dialog ---
+  const openAddBranch = () => {
+    setBranchEditId(null);
+    setBranchForm(emptyBranchForm());
+    setBranchDialog(true);
+  };
+
+  const openEditBranch = (b: Branch) => {
+    setBranchEditId(b.id);
+    setBranchForm({
+      name: b.name,
+      companyId: b.companyId || "",
+      zoneId: b.zoneId || "",
+      address: b.address || "",
+      branchManagerId: b.branchManagerId || "",
+      contactNumber: b.contactNumber || "",
+    });
+    setBranchDialog(true);
+  };
+
+  const saveBranch = () => {
+    if (!branchForm.name) return;
+    const companyId = isSuperAdmin
+      ? branchForm.companyId
+      : currentUser?.companyId || "";
+    if (branchEditId) {
+      storage.updateBranch(branchEditId, {
+        name: branchForm.name,
+        companyId,
+        zoneId: branchForm.zoneId,
+        address: branchForm.address || undefined,
+        branchManagerId: branchForm.branchManagerId || undefined,
+        contactNumber: branchForm.contactNumber || undefined,
+      });
+    } else {
+      storage.addBranch({
+        name: branchForm.name,
+        companyId,
+        zoneId: branchForm.zoneId,
+        address: branchForm.address || undefined,
+        branchManagerId: branchForm.branchManagerId || undefined,
+        contactNumber: branchForm.contactNumber || undefined,
+      });
+    }
+    setBranches(scopedBranches);
+    setBranchDialog(false);
+  };
+
+  const doDeleteBranch = (id: string) => {
+    storage.deleteBranch(id);
+    setBranches(scopedBranches);
+    setConfirmDeleteBranch(null);
+  };
+
   const roleColor: Record<string, string> = {
     SuperAdmin: "bg-purple-100 text-purple-800",
     CompanyAdmin: "bg-blue-100 text-blue-800",
@@ -204,122 +315,229 @@ export default function UserManagement() {
     Staff: "bg-gray-100 text-gray-800",
   };
 
+  const visibleBranches = isSuperAdmin
+    ? branches
+    : branches.filter((b) => b.companyId === currentUser?.companyId);
+
+  const branchFilteredZones = allZones.filter(
+    (z) => !branchForm.companyId || z.companyId === branchForm.companyId,
+  );
+
   return (
     <div className="space-y-6" data-ocid="users.page">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">User Management</h2>
-          <p className="text-muted-foreground text-sm">
-            Manage users, roles, and farm assignments
-          </p>
-        </div>
-        <Button onClick={openAdd} data-ocid="users.add_user.button">
-          <Plus size={16} className="mr-1" /> Add User
-        </Button>
+      <div>
+        <h2 className="text-2xl font-bold">User Management</h2>
+        <p className="text-muted-foreground text-sm">
+          Manage users, roles, branch assignments, and farm access
+        </p>
       </div>
 
-      {visibleUsers.length === 0 ? (
-        <Card data-ocid="users.empty_state">
-          <CardContent className="p-8 text-center text-muted-foreground">
-            No users found.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" data-ocid="users.table">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left p-2">#</th>
-                <th className="text-left p-2">Name</th>
-                <th className="text-left p-2">Username</th>
-                <th className="text-left p-2">Role</th>
-                <th className="text-left p-2">Company</th>
-                <th className="text-left p-2">Assigned Farms</th>
-                <th className="text-left p-2">Status</th>
-                <th className="p-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleUsers.map((u, i) => (
-                <tr
-                  key={u.id}
-                  className="border-b hover:bg-muted/30"
-                  data-ocid={`users.row.${i + 1}`}
-                >
-                  <td className="p-2 text-muted-foreground">{i + 1}</td>
-                  <td className="p-2 font-medium">{u.name}</td>
-                  <td className="p-2 font-mono text-xs">{u.username}</td>
-                  <td className="p-2">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        roleColor[u.role] || "bg-gray-100"
-                      }`}
-                    >
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="p-2 text-sm text-muted-foreground">
-                    {companies.find((c) => c.id === u.companyId)?.name || "-"}
-                  </td>
-                  <td className="p-2 text-xs text-muted-foreground">
-                    {(u.assignedFarmIds || []).length > 0
-                      ? (u.assignedFarmIds || [])
-                          .map(
-                            (fid) => allFarms.find((f) => f.id === fid)?.name,
-                          )
-                          .filter(Boolean)
-                          .join(", ")
-                      : "-"}
-                  </td>
-                  <td className="p-2">
-                    <Badge
-                      variant={u.active !== false ? "default" : "secondary"}
-                    >
-                      {u.active !== false ? "Active" : "Inactive"}
-                    </Badge>
-                  </td>
-                  <td className="p-2 text-right space-x-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openEdit(u)}
-                      data-ocid={`users.edit_button.${i + 1}`}
-                    >
-                      <Pencil size={14} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => toggleActive(u)}
-                      title={u.active !== false ? "Deactivate" : "Activate"}
-                      data-ocid={`users.toggle.${i + 1}`}
-                    >
-                      {u.active !== false ? (
-                        <UserX size={14} className="text-orange-500" />
-                      ) : (
-                        <UserCheck size={14} className="text-green-500" />
-                      )}
-                    </Button>
-                    {u.id !== currentUser?.id && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600"
-                        onClick={() => setConfirmDelete(u.id)}
-                        data-ocid={`users.delete_button.${i + 1}`}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Tabs defaultValue="users">
+        <TabsList data-ocid="users.tabs.tab">
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="branches" data-ocid="users.branch_management.tab">
+            <GitBranch size={14} className="mr-1" /> Branch Management
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Add/Edit Dialog */}
+        {/* ===== USERS TAB ===== */}
+        <TabsContent value="users" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={openAdd} data-ocid="users.add_user.button">
+              <Plus size={16} className="mr-1" /> Add User
+            </Button>
+          </div>
+
+          {visibleUsers.length === 0 ? (
+            <Card data-ocid="users.empty_state">
+              <CardContent className="p-8 text-center text-muted-foreground">
+                No users found.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-ocid="users.table">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-2">#</th>
+                    <th className="text-left p-2">Name</th>
+                    <th className="text-left p-2">Emp ID</th>
+                    <th className="text-left p-2">Username</th>
+                    <th className="text-left p-2">Role</th>
+                    <th className="text-left p-2">Mobile</th>
+                    <th className="text-left p-2">Company</th>
+                    <th className="text-left p-2">Assigned Farms</th>
+                    <th className="text-left p-2">Status</th>
+                    <th className="p-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleUsers.map((u, i) => (
+                    <tr
+                      key={u.id}
+                      className="border-b hover:bg-muted/30"
+                      data-ocid={`users.row.${i + 1}`}
+                    >
+                      <td className="p-2 text-muted-foreground">{i + 1}</td>
+                      <td className="p-2 font-medium">{u.name}</td>
+                      <td className="p-2 font-mono text-xs text-muted-foreground">
+                        {u.employeeId || "-"}
+                      </td>
+                      <td className="p-2 font-mono text-xs">{u.username}</td>
+                      <td className="p-2">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            roleColor[u.role] || "bg-gray-100"
+                          }`}
+                        >
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="p-2 text-xs text-muted-foreground">
+                        {u.mobileNumber || "-"}
+                      </td>
+                      <td className="p-2 text-sm text-muted-foreground">
+                        {companies.find((c) => c.id === u.companyId)?.name ||
+                          "-"}
+                      </td>
+                      <td className="p-2 text-xs text-muted-foreground">
+                        {(u.assignedFarmIds || []).length > 0
+                          ? (u.assignedFarmIds || [])
+                              .map(
+                                (fid) =>
+                                  allFarms.find((f) => f.id === fid)?.name,
+                              )
+                              .filter(Boolean)
+                              .join(", ")
+                          : "-"}
+                      </td>
+                      <td className="p-2">
+                        <Badge
+                          variant={u.active !== false ? "default" : "secondary"}
+                        >
+                          {u.active !== false ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+                      <td className="p-2 text-right space-x-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openEdit(u)}
+                          data-ocid={`users.edit_button.${i + 1}`}
+                        >
+                          <Pencil size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => toggleActive(u)}
+                          title={u.active !== false ? "Deactivate" : "Activate"}
+                          data-ocid={`users.toggle.${i + 1}`}
+                        >
+                          {u.active !== false ? (
+                            <UserX size={14} className="text-orange-500" />
+                          ) : (
+                            <UserCheck size={14} className="text-green-500" />
+                          )}
+                        </Button>
+                        {u.id !== currentUser?.id && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600"
+                            onClick={() => setConfirmDelete(u.id)}
+                            data-ocid={`users.delete_button.${i + 1}`}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ===== BRANCH MANAGEMENT TAB ===== */}
+        <TabsContent value="branches" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={openAddBranch} data-ocid="users.add_branch.button">
+              <Plus size={16} className="mr-1" /> Add Branch
+            </Button>
+          </div>
+
+          {visibleBranches.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                No branches found. Create your first branch.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-ocid="users.branch.table">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-2">#</th>
+                    <th className="text-left p-2">Code</th>
+                    <th className="text-left p-2">Branch Name</th>
+                    <th className="text-left p-2">Address</th>
+                    <th className="text-left p-2">Manager</th>
+                    <th className="text-left p-2">Contact</th>
+                    <th className="text-left p-2">Company</th>
+                    <th className="p-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleBranches.map((b, i) => (
+                    <tr key={b.id} className="border-b hover:bg-muted/30">
+                      <td className="p-2 text-muted-foreground">{i + 1}</td>
+                      <td className="p-2 font-mono text-xs">
+                        <Badge variant="outline">{b.branchCode || "-"}</Badge>
+                      </td>
+                      <td className="p-2 font-medium">{b.name}</td>
+                      <td className="p-2 text-xs text-muted-foreground">
+                        {b.address || "-"}
+                      </td>
+                      <td className="p-2 text-xs text-muted-foreground">
+                        {users.find((u) => u.id === b.branchManagerId)?.name ||
+                          "-"}
+                      </td>
+                      <td className="p-2 text-xs text-muted-foreground">
+                        {b.contactNumber || "-"}
+                      </td>
+                      <td className="p-2 text-xs text-muted-foreground">
+                        {companies.find((c) => c.id === b.companyId)?.name ||
+                          "-"}
+                      </td>
+                      <td className="p-2 text-right space-x-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openEditBranch(b)}
+                        >
+                          <Pencil size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600"
+                          onClick={() => setConfirmDeleteBranch(b.id)}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* ===== ADD/EDIT USER DIALOG ===== */}
       <Dialog open={dialog} onOpenChange={setDialog}>
         <DialogContent
           className="max-w-lg max-h-[90vh] overflow-y-auto"
@@ -367,6 +585,31 @@ export default function UserManagement() {
                 }
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Mobile Number</Label>
+                <Input
+                  data-ocid="users.mobile.input"
+                  value={form.mobileNumber}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, mobileNumber: e.target.value }))
+                  }
+                  placeholder="+91 XXXXX XXXXX"
+                />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  data-ocid="users.email.input"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                  placeholder="email@example.com"
+                />
+              </div>
+            </div>
             <div>
               <Label>Role *</Label>
               <select
@@ -380,6 +623,7 @@ export default function UserManagement() {
                     assignedZoneIds: [],
                     assignedBranchIds: [],
                     assignedShedId: "",
+                    assignedArea: "",
                   }))
                 }
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
@@ -409,6 +653,20 @@ export default function UserManagement() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {form.role === "Supervisor" && (
+              <div>
+                <Label>Assigned Area / Line</Label>
+                <Input
+                  data-ocid="users.area.input"
+                  value={form.assignedArea}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, assignedArea: e.target.value }))
+                  }
+                  placeholder="e.g. Line A, Zone North, Shed 3-5"
+                />
               </div>
             )}
 
@@ -442,7 +700,14 @@ export default function UserManagement() {
                           checked={form.assignedBranchIds.includes(b.id)}
                           onCheckedChange={() => toggleBranchId(b.id)}
                         />
-                        <span className="text-sm">{b.name}</span>
+                        <span className="text-sm">
+                          {b.branchCode && (
+                            <span className="font-mono text-xs mr-1">
+                              {b.branchCode}
+                            </span>
+                          )}
+                          {b.name}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -514,7 +779,135 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm Dialog */}
+      {/* ===== ADD/EDIT BRANCH DIALOG ===== */}
+      <Dialog open={branchDialog} onOpenChange={setBranchDialog}>
+        <DialogContent className="max-w-md" data-ocid="users.branch.dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {branchEditId ? "Edit Branch" : "Add Branch"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Branch Name *</Label>
+              <Input
+                value={branchForm.name}
+                onChange={(e) =>
+                  setBranchForm((f) => ({ ...f, name: e.target.value }))
+                }
+                placeholder="Branch name"
+              />
+            </div>
+            {!branchEditId && (
+              <p className="text-xs text-muted-foreground">
+                Branch Code will be auto-generated (e.g. BR-001)
+              </p>
+            )}
+            {isSuperAdmin && (
+              <div>
+                <Label>Company</Label>
+                <select
+                  value={branchForm.companyId}
+                  onChange={(e) =>
+                    setBranchForm((f) => ({
+                      ...f,
+                      companyId: e.target.value,
+                      zoneId: "",
+                    }))
+                  }
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select Company...</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div>
+              <Label>Zone</Label>
+              <select
+                value={branchForm.zoneId}
+                onChange={(e) =>
+                  setBranchForm((f) => ({ ...f, zoneId: e.target.value }))
+                }
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select Zone...</option>
+                {(isSuperAdmin
+                  ? branchFilteredZones
+                  : allZones.filter(
+                      (z) => z.companyId === currentUser?.companyId,
+                    )
+                ).map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Address</Label>
+              <Input
+                value={branchForm.address}
+                onChange={(e) =>
+                  setBranchForm((f) => ({ ...f, address: e.target.value }))
+                }
+                placeholder="Branch address"
+              />
+            </div>
+            <div>
+              <Label>Branch Manager</Label>
+              <select
+                value={branchForm.branchManagerId}
+                onChange={(e) =>
+                  setBranchForm((f) => ({
+                    ...f,
+                    branchManagerId: e.target.value,
+                  }))
+                }
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select Manager...</option>
+                {managerUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Contact Number</Label>
+              <Input
+                value={branchForm.contactNumber}
+                onChange={(e) =>
+                  setBranchForm((f) => ({
+                    ...f,
+                    contactNumber: e.target.value,
+                  }))
+                }
+                placeholder="Contact number"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBranchDialog(false)}
+              data-ocid="users.branch.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveBranch} data-ocid="users.branch.submit_button">
+              {branchEditId ? "Save Changes" : "Create Branch"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Confirm */}
       <Dialog
         open={!!confirmDelete}
         onOpenChange={() => setConfirmDelete(null)}
@@ -538,6 +931,37 @@ export default function UserManagement() {
               variant="destructive"
               onClick={() => confirmDelete && doDelete(confirmDelete)}
               data-ocid="users.delete.confirm_button"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Branch Confirm */}
+      <Dialog
+        open={!!confirmDeleteBranch}
+        onOpenChange={() => setConfirmDeleteBranch(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Branch</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete this branch?
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDeleteBranch(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                confirmDeleteBranch && doDeleteBranch(confirmDeleteBranch)
+              }
             >
               Delete
             </Button>

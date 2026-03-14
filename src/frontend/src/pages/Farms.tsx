@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type Batch, type Farm, type Shed, storage } from "@/lib/storage";
 import {
   Bird,
@@ -38,18 +38,19 @@ function daysBetween(from: string, to: string) {
 
 export default function Farms() {
   const { currentUser } = useAuth();
-  const accessibleFarmIds = useAccessibleFarmIds();
   const navigate = useNavigate();
 
   const [, setRefresh] = useState(0);
   const refresh = () => setRefresh((n) => n + 1);
 
-  const allFarmsRaw = storage.getFarms();
-  const farms = (
-    accessibleFarmIds === null
-      ? allFarmsRaw
-      : allFarmsRaw.filter((f) => accessibleFarmIds.includes(f.id))
-  ) as Farm[];
+  const {
+    farms: scopedFarms,
+    zones: allZones,
+    branches: allBranches,
+    users: allUsers,
+    companyId: myCompanyId,
+  } = useCompanyScope();
+  const farms = scopedFarms as Farm[];
 
   const allShedsRaw = storage.getSheds();
   const sheds = allShedsRaw.filter((s) =>
@@ -62,9 +63,6 @@ export default function Farms() {
   ) as Batch[];
 
   const companies = storage.getCompanies();
-  const allZones = storage.getZones();
-  const allBranches = storage.getBranches();
-  const allUsers = storage.getUsers();
 
   const supervisors = allUsers.filter((u) => u.role === "Supervisor");
   const dealers = allUsers.filter((u) => u.role === "Dealer");
@@ -145,11 +143,15 @@ export default function Farms() {
 
   const saveFarm = () => {
     if (!farmForm.name) return;
+    const farmCompanyId =
+      currentUser?.role === "SuperAdmin"
+        ? farmForm.companyId
+        : myCompanyId || farmForm.companyId;
     storage.addFarm({
       name: farmForm.name,
       location: farmForm.location,
       totalCapacity: Number.parseInt(farmForm.totalCapacity) || 0,
-      companyId: farmForm.companyId || undefined,
+      companyId: farmCompanyId || undefined,
       zoneId: farmForm.zoneId || undefined,
       branchId: farmForm.branchId || undefined,
       farmerName: farmForm.farmerName || undefined,

@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { useAccessibleFarmIds } from "@/lib/roleFilter";
 import { type Batch, type GCScheme, storage } from "@/lib/storage";
 import { BookOpen } from "lucide-react";
@@ -43,9 +44,8 @@ export default function GCProduction() {
   const { currentUser } = useAuth();
   const accessibleFarmIds = useAccessibleFarmIds();
   const [batches, setBatches] = useState<Batch[]>(() => storage.getBatches());
-  const [schemes, setSchemes] = useState<GCScheme[]>(() =>
-    storage.getGCSchemes(),
-  );
+  const { farms: scopedFarms, gcSchemes } = useCompanyScope();
+  const [schemes, setSchemes] = useState<GCScheme[]>(() => gcSchemes);
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
   const [closeForm, setCloseForm] = useState<CloseForm>({
     schemeId: "",
@@ -54,7 +54,7 @@ export default function GCProduction() {
     birdsSold: "",
   });
 
-  const farms = useMemo(() => storage.getFarms(), []);
+  const farms = scopedFarms;
   const sheds = useMemo(() => storage.getSheds(), []);
 
   const activeBatches = useMemo(() => {
@@ -114,7 +114,7 @@ export default function GCProduction() {
       birdsSold: String(batch.birdsAlive),
     });
     // refresh schemes
-    setSchemes(storage.getGCSchemes());
+    setSchemes(gcSchemes);
   };
 
   const handleConfirm = () => {
@@ -122,7 +122,7 @@ export default function GCProduction() {
       toast.error("Please fill all required fields.");
       return;
     }
-    storage.addGCSettlement({
+    storage.addPendingSettlement({
       batchId: selectedBatch.id,
       batchNumber: selectedBatch.batchNumber,
       farmId: selectedBatch.farmId,
@@ -140,6 +140,7 @@ export default function GCProduction() {
       totalGCPayable: calc.totalGCPayable,
       closedAt: new Date().toISOString(),
       closedBy: currentUser?.name || "Unknown",
+      status: "pending",
     });
     storage.updateBatch(selectedBatch.id, { status: "closed" });
     setBatches(storage.getBatches());

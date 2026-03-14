@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type GCScheme, storage } from "@/lib/storage";
 import { Trash2, TrendingUp } from "lucide-react";
 import { useState } from "react";
@@ -19,9 +20,12 @@ import { toast } from "sonner";
 
 export default function GCSchemes() {
   const { currentUser } = useAuth();
-  const [schemes, setSchemes] = useState<GCScheme[]>(() =>
-    storage.getGCSchemes(),
-  );
+  const {
+    gcSchemes: scopedSchemes,
+    companyId: myCompanyId,
+    isSuperAdmin,
+  } = useCompanyScope();
+  const [schemes, setSchemes] = useState<GCScheme[]>(() => scopedSchemes);
   const [form, setForm] = useState({
     name: "",
     baseGCRate: "",
@@ -38,7 +42,7 @@ export default function GCSchemes() {
       return;
     }
     storage.addGCScheme({
-      companyId: currentUser?.companyId || "",
+      companyId: myCompanyId || currentUser?.companyId || "",
       name: form.name,
       baseGCRate: Number.parseFloat(form.baseGCRate) || 0,
       standardFCR: Number.parseFloat(form.standardFCR) || 0,
@@ -47,7 +51,11 @@ export default function GCSchemes() {
       mortalityPenaltyPerBird:
         Number.parseFloat(form.mortalityPenaltyPerBird) || 0,
     });
-    setSchemes(storage.getGCSchemes());
+    setSchemes(
+      isSuperAdmin
+        ? storage.getGCSchemes()
+        : storage.getGCSchemesByCompany(myCompanyId),
+    );
     setForm({
       name: "",
       baseGCRate: "",
@@ -61,7 +69,11 @@ export default function GCSchemes() {
 
   const handleDelete = (id: string) => {
     storage.deleteGCScheme(id);
-    setSchemes(storage.getGCSchemes());
+    setSchemes(
+      isSuperAdmin
+        ? storage.getGCSchemes()
+        : storage.getGCSchemesByCompany(myCompanyId),
+    );
     toast.success("Scheme deleted.");
   };
 

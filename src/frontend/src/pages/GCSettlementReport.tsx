@@ -19,20 +19,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type GCSettlement, storage } from "@/lib/storage";
 import { Download, FileText, Printer, Receipt } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export default function GCSettlementReport() {
-  const accessibleFarmIds = useAccessibleFarmIds();
-  const farms = useMemo(() => storage.getFarms(), []);
+  const { farms } = useCompanyScope();
+  const farmIds = useMemo(() => new Set(farms.map((f) => f.id)), [farms]);
 
-  const accessibleFarms = useMemo(() => {
-    if (accessibleFarmIds === null) return farms;
-    return farms.filter((f) => accessibleFarmIds.includes(f.id));
-  }, [farms, accessibleFarmIds]);
+  const accessibleFarms = farms;
 
   const [filterFarmId, setFilterFarmId] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -44,12 +41,9 @@ export default function GCSettlementReport() {
     farms.find((f) => f.id === farmId)?.name || farmId;
 
   const handleGenerate = () => {
-    let settlements = storage.getGCSettlements();
-    if (accessibleFarmIds !== null) {
-      settlements = settlements.filter((s) =>
-        accessibleFarmIds.includes(s.farmId),
-      );
-    }
+    let settlements = storage
+      .getGCSettlements()
+      .filter((s) => farmIds.has(s.farmId));
     if (filterFarmId !== "all") {
       settlements = settlements.filter((s) => s.farmId === filterFarmId);
     }

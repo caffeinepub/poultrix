@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type Receipt, storage } from "@/lib/storage";
 import { Plus, Receipt as ReceiptIcon, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -10,17 +10,11 @@ import { useState } from "react";
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Receipts() {
-  const accessibleFarmIds = useAccessibleFarmIds();
-  const allFarms = storage.getFarms();
-  const farms =
-    accessibleFarmIds === null
-      ? allFarms
-      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
+  const { farms } = useCompanyScope();
+  const farmIds = new Set(farms.map((f) => f.id));
   const allReceipts = storage.getReceipts();
   const [receipts, setReceipts] = useState<Receipt[]>(
-    accessibleFarmIds === null
-      ? allReceipts
-      : allReceipts.filter((r) => accessibleFarmIds.includes(r.farmId)),
+    allReceipts.filter((r) => farmIds.has(r.farmId)),
   );
   const [form, setForm] = useState({
     date: today(),
@@ -44,11 +38,8 @@ export default function Receipts() {
       notes: form.notes,
       enteredBy: form.enteredBy,
     });
-    const updated = storage.getReceipts();
     setReceipts(
-      accessibleFarmIds === null
-        ? updated
-        : updated.filter((r) => accessibleFarmIds.includes(r.farmId)),
+      storage.getReceipts().filter((r) => farms.some((f) => f.id === r.farmId)),
     );
     setForm({
       date: today(),
@@ -62,11 +53,8 @@ export default function Receipts() {
 
   const handleDelete = (id: string) => {
     storage.deleteReceipt(id);
-    const updated = storage.getReceipts();
     setReceipts(
-      accessibleFarmIds === null
-        ? updated
-        : updated.filter((r) => accessibleFarmIds.includes(r.farmId)),
+      storage.getReceipts().filter((r) => farms.some((f) => f.id === r.farmId)),
     );
   };
 

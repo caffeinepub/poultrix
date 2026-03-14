@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import {
   type Batch,
   type BirdSale,
@@ -212,11 +212,11 @@ function fmt(n: number, decimals = 0) {
 
 export default function PerformanceReport() {
   const { currentUser } = useAuth();
-  const accessibleFarmIds = useAccessibleFarmIds();
-
-  const allFarms = useMemo(() => storage.getFarms(), []);
-  const allZones = useMemo(() => storage.getZones(), []);
-  const allBranches = useMemo(() => storage.getBranches(), []);
+  const {
+    farms: allFarms,
+    zones: allZones,
+    branches: allBranches,
+  } = useCompanyScope();
   const _allCompanies = useMemo(() => storage.getCompanies(), []);
 
   const showZoneBranch = !["Supervisor", "Farmer", "Dealer", "Staff"].includes(
@@ -234,11 +234,8 @@ export default function PerformanceReport() {
   const [reportData, setReportData] = useState<FarmRow[] | null>(null);
   const [generated, setGenerated] = useState(false);
 
-  // Accessible farms
-  const accessibleFarms = useMemo(() => {
-    if (accessibleFarmIds === null) return allFarms;
-    return allFarms.filter((f) => accessibleFarmIds.includes(f.id));
-  }, [allFarms, accessibleFarmIds]);
+  // Accessible farms - already scoped by useCompanyScope
+  const accessibleFarms = allFarms;
 
   // Cascading zone filter
   const filteredZones = useMemo(() => {
@@ -277,7 +274,10 @@ export default function PerformanceReport() {
 
     const batches = storage.getBatches();
     const dailyEntries = storage.getDailyEntries();
-    const birdSales = storage.getBirdSales();
+    const farmIdsSet = new Set(allFarms.map((f) => f.id));
+    const birdSales = storage
+      .getBirdSales()
+      .filter((s) => farmIdsSet.has(s.farmId));
 
     const rows = computeFarmRows(
       farmsToReport,

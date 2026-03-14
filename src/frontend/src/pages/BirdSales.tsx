@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type BirdSale, storage } from "@/lib/storage";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -10,22 +10,12 @@ import { useMemo, useState } from "react";
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function BirdSales() {
-  const accessibleFarmIds = useAccessibleFarmIds();
-  const allFarms = storage.getFarms();
-  const farms =
-    accessibleFarmIds === null
-      ? allFarms
-      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
+  const { farms } = useCompanyScope();
+  const farmIds = new Set(farms.map((f) => f.id));
   const allBatches = storage.getBatches();
-  const batches =
-    accessibleFarmIds === null
-      ? allBatches
-      : allBatches.filter((b) => accessibleFarmIds.includes(b.farmId));
+  const batches = allBatches.filter((b) => farmIds.has(b.farmId));
   const [sales, setSales] = useState<BirdSale[]>(() => {
-    const all = storage.getBirdSales();
-    return accessibleFarmIds === null
-      ? all
-      : all.filter((s) => accessibleFarmIds.includes(s.farmId));
+    return storage.getBirdSales().filter((s) => farmIds.has(s.farmId));
   });
   const [form, setForm] = useState({
     farmId: "",
@@ -63,12 +53,9 @@ export default function BirdSales() {
       vehicleNumber: form.vehicleNumber,
       dispatchDate: form.dispatchDate,
     });
+    const farmIds2 = new Set(farms.map((f) => f.id));
     const updated = storage.getBirdSales();
-    setSales(
-      accessibleFarmIds === null
-        ? updated
-        : updated.filter((s) => accessibleFarmIds.includes(s.farmId)),
-    );
+    setSales(updated.filter((s) => farmIds2.has(s.farmId)));
     setForm({
       farmId: "",
       batchId: "",

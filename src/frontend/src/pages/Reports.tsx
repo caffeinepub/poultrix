@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useAccessibleFarmIds, useCompanyScope } from "@/lib/roleFilter";
 import { type Branch, type Company, type Zone, storage } from "@/lib/storage";
 import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -149,18 +149,25 @@ function ReportTable({
 export default function Reports() {
   const { currentUser } = useAuth();
   const accessibleFarmIds = useAccessibleFarmIds();
+  const {
+    zones: allZones,
+    branches: allBranches,
+    users: allUsers,
+    farms: scopedFarms,
+  } = useCompanyScope();
+  const allFarmsScoped = scopedFarms;
 
   const allBatches = storage.getBatches();
-  const allFarms = storage.getFarms();
+  const allFarms = allFarmsScoped;
   const allDailyEntries = storage.getDailyEntries();
   const feedPurchases = storage.getFeedPurchases();
-  const allBirdSales = storage.getBirdSales();
+  const allBirdSalesFull = storage.getBirdSales();
+  const farmIds = new Set(allFarms.map((f) => f.id));
+  const allBirdSales = allBirdSalesFull.filter((s) => farmIds.has(s.farmId));
   const allPayments = storage.getPayments();
   const allReceipts = storage.getReceipts();
-  const allUsers = storage.getUsers();
+
   const allCompanies = storage.getCompanies();
-  const allZones = storage.getZones();
-  const allBranches = storage.getBranches();
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -199,7 +206,7 @@ export default function Reports() {
     );
     if (!companyFilter) return baseZones;
     return baseZones.filter((z) => z.companyId === companyFilter);
-  }, [allZones, accessibleCompanyIds, companyFilter]);
+  }, [accessibleCompanyIds, companyFilter, allZones]);
 
   // Branches filtered by selected zone (and company)
   const visibleBranches = useMemo(() => {
@@ -212,7 +219,7 @@ export default function Reports() {
     if (companyFilter)
       return baseBranches.filter((b) => b.companyId === companyFilter);
     return baseBranches;
-  }, [allBranches, accessibleCompanyIds, zoneFilter, companyFilter]);
+  }, [accessibleCompanyIds, zoneFilter, companyFilter, allBranches]);
 
   // Farms filtered by company/zone/branch cascades
   const visibleFarms = useMemo(() => {
@@ -258,11 +265,11 @@ export default function Reports() {
     visibleFarms,
     farmerFilter,
     farmFilter,
-    allUsers,
     accessibleFarmIds,
     companyFilter,
     zoneFilter,
     branchFilter,
+    allUsers,
   ]);
 
   const batches =

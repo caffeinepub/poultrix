@@ -2,14 +2,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/context/AuthContext";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type Branch, storage } from "@/lib/storage";
 import { GitBranch, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export default function Branches() {
-  const [branches, setBranches] = useState<Branch[]>(storage.getBranches());
+  const { currentUser: _cu } = useAuth();
+  const {
+    branches: scopedBranches,
+    zones: scopedZones,
+    companyId: myCompanyId,
+    isSuperAdmin,
+  } = useCompanyScope();
+  const [branches, setBranches] = useState<Branch[]>(scopedBranches);
   const companies = storage.getCompanies();
-  const allZones = storage.getZones();
+  const allZones = scopedZones;
   const [form, setForm] = useState({ companyId: "", zoneId: "", name: "" });
 
   const filteredZones = form.companyId
@@ -24,13 +33,21 @@ export default function Branches() {
       zoneId: form.zoneId,
       name: form.name.trim(),
     });
-    setBranches(storage.getBranches());
+    setBranches(
+      isSuperAdmin
+        ? storage.getBranches()
+        : storage.getBranchesByCompany(myCompanyId),
+    );
     setForm({ ...form, name: "" });
   };
 
   const handleDelete = (id: string) => {
     storage.deleteBranch(id);
-    setBranches(storage.getBranches());
+    setBranches(
+      isSuperAdmin
+        ? storage.getBranches()
+        : storage.getBranchesByCompany(myCompanyId),
+    );
   };
 
   return (

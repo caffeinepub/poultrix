@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/AuthContext";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { storage } from "@/lib/storage";
 import {
   Activity,
@@ -35,26 +35,32 @@ function fmt(n: number, decimals = 0) {
 export default function FarmDashboard() {
   const { farmId } = useParams<{ farmId: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
-  const accessibleFarmIds = useAccessibleFarmIds();
+  const { currentUser: _currentUser } = useAuth();
+  const {
+    farms: scopedFarms,
+    zones: allZones,
+    branches: allBranches,
+    users: allUsers,
+    isSuperAdmin,
+  } = useCompanyScope();
 
   const farm = useMemo(
-    () => storage.getFarms().find((f) => f.id === farmId),
-    [farmId],
+    () =>
+      scopedFarms.find((f) => f.id === farmId) ||
+      (isSuperAdmin
+        ? storage.getFarms().find((f) => f.id === farmId)
+        : undefined),
+    [farmId, scopedFarms, isSuperAdmin],
   );
 
-  // Access control
+  // Access control - farm must be in scoped list
   const hasAccess = useMemo(() => {
     if (!farm) return false;
-    if (currentUser?.role === "SuperAdmin" || accessibleFarmIds === null)
-      return true;
-    return accessibleFarmIds?.includes(farm.id) ?? false;
-  }, [farm, currentUser, accessibleFarmIds]);
+    if (isSuperAdmin) return true;
+    return scopedFarms.some((f) => f.id === farmId);
+  }, [farm, scopedFarms, farmId, isSuperAdmin]);
 
   const companies = storage.getCompanies();
-  const allZones = storage.getZones();
-  const allBranches = storage.getBranches();
-  const allUsers = storage.getUsers();
   const sheds = storage.getShedsByFarm(farmId || "");
   const allBatches = storage.getBatches();
   const allDailyEntries = storage.getDailyEntries();

@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type Batch, storage } from "@/lib/storage";
 import { Bird, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -18,18 +18,12 @@ const statusColor = (s: string) =>
       : "bg-gray-100 text-gray-600";
 
 export default function ChicksPlacement() {
-  const accessibleFarmIds = useAccessibleFarmIds();
-  const allFarms = storage.getFarms();
-  const farms =
-    accessibleFarmIds === null
-      ? allFarms
-      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
+  const { farms } = useCompanyScope();
   const sheds = storage.getSheds();
   const allBatches = storage.getBatches();
+  const farmIds = new Set(farms.map((f) => f.id));
   const [batches, setBatches] = useState<Batch[]>(
-    accessibleFarmIds === null
-      ? allBatches
-      : allBatches.filter((b) => accessibleFarmIds.includes(b.farmId)),
+    allBatches.filter((b) => farmIds.has(b.farmId)),
   );
   const [form, setForm] = useState({
     farmId: "",
@@ -68,12 +62,9 @@ export default function ChicksPlacement() {
       birdsAlive: Number.parseInt(form.chicksQty) || 0,
       status: "active",
     });
+    const farmIds2 = new Set(farms.map((f) => f.id));
     const updated = storage.getBatches();
-    setBatches(
-      accessibleFarmIds === null
-        ? updated
-        : updated.filter((b) => accessibleFarmIds.includes(b.farmId)),
-    );
+    setBatches(updated.filter((b) => farmIds2.has(b.farmId)));
     setForm({
       farmId: "",
       shedId: "",

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type DailyEntry as DE, storage } from "@/lib/storage";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -20,13 +20,10 @@ function daysBetween(from: string, to: string) {
 }
 
 export default function DailyEntry() {
-  const accessibleFarmIds = useAccessibleFarmIds();
+  const { farms } = useCompanyScope();
+  const farmIds = new Set(farms.map((f) => f.id));
   const allBatches = storage.getBatches().filter((b) => b.status === "active");
-  const batches =
-    accessibleFarmIds === null
-      ? allBatches
-      : allBatches.filter((b) => accessibleFarmIds.includes(b.farmId));
-  const farms = storage.getFarms();
+  const batches = allBatches.filter((b) => farmIds.has(b.farmId));
   const [entries, setEntries] = useState<DE[]>(storage.getDailyEntries());
   const [medicines, setMedicines] = useState(storage.getMedicines());
   const [vaccines, setVaccines] = useState(storage.getVaccines());

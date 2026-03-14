@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { filterByFarms, useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { storage } from "@/lib/storage";
 import {
   AlertTriangle,
@@ -26,31 +26,22 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
-  const accessibleFarmIds = useAccessibleFarmIds();
+  const { farms, zones, branches } = useCompanyScope();
 
   const allBatches = storage.getBatches();
-  const allFarms = storage.getFarms();
   const allDailyEntries = storage.getDailyEntries();
   const allFeedStocks = storage.getFeedStocks();
   const allSales = storage.getBirdSales();
-  const zones = storage.getZones();
-  const branches = storage.getBranches();
   const allPayments = storage.getPayments();
   const allReceipts = storage.getReceipts();
-
-  const farms =
-    accessibleFarmIds === null
-      ? allFarms
-      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
-  const batches = allBatches.filter((b) =>
-    farms.some((f) => f.id === b.farmId),
-  );
+  const farmIds = new Set(farms.map((f) => f.id));
+  const batches = allBatches.filter((b) => farmIds.has(b.farmId));
   const batchIds = new Set(batches.map((b) => b.id));
   const dailyEntries = allDailyEntries.filter((e) => batchIds.has(e.batchId));
-  const sales = filterByFarms(allSales, accessibleFarmIds);
-  const payments = filterByFarms(allPayments, accessibleFarmIds);
-  const receipts = filterByFarms(allReceipts, accessibleFarmIds);
-  const feedStocks = filterByFarms(allFeedStocks, accessibleFarmIds);
+  const sales = allSales.filter((s) => farmIds.has(s.farmId));
+  const payments = allPayments.filter((p) => farmIds.has(p.farmId));
+  const receipts = allReceipts.filter((r) => farmIds.has(r.farmId));
+  const feedStocks = allFeedStocks.filter((s) => farmIds.has(s.farmId));
 
   const totalBirds = useMemo(
     () =>

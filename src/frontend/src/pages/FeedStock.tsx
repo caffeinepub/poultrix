@@ -10,33 +10,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type FeedStock as FS, storage } from "@/lib/storage";
 import { AlertTriangle, Package, Plus } from "lucide-react";
 import { useState } from "react";
 
-const FEED_TYPES = [
-  "Starter",
-  "Grower",
-  "Finisher",
-  "Broiler Pre-Starter",
-  "Broiler Finisher",
-];
-
 export default function FeedStock() {
-  const accessibleFarmIds = useAccessibleFarmIds();
-  const allFarms = storage.getFarms();
-  const farms =
-    accessibleFarmIds === null
-      ? allFarms
-      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
+  const { farms, feedTypes } = useCompanyScope();
+  const farmIds = new Set(farms.map((f) => f.id));
+
   const allStocks = storage.getFeedStocks();
   const [stocks, setStocks] = useState<FS[]>(
-    accessibleFarmIds === null
-      ? allStocks
-      : allStocks.filter(
-          (s) => s.farmId === "global" || accessibleFarmIds.includes(s.farmId),
-        ),
+    allStocks.filter((s) => s.farmId === "global" || farmIds.has(s.farmId)),
   );
   const [dialog, setDialog] = useState(false);
   const [editItem, setEditItem] = useState<FS | null>(null);
@@ -45,6 +30,7 @@ export default function FeedStock() {
     feedType: "",
     currentStockBags: "",
     alertThresholdBags: "10",
+    openingStockKg: "0",
   });
 
   const lowStock = stocks.filter(
@@ -58,6 +44,7 @@ export default function FeedStock() {
       feedType: s.feedType,
       currentStockBags: String(s.currentStockBags),
       alertThresholdBags: String(s.alertThresholdBags),
+      openingStockKg: String(s.openingStockKg ?? 0),
     });
     setDialog(true);
   };
@@ -68,6 +55,7 @@ export default function FeedStock() {
       feedType: "",
       currentStockBags: "",
       alertThresholdBags: "10",
+      openingStockKg: "0",
     });
     setDialog(true);
   };
@@ -78,21 +66,20 @@ export default function FeedStock() {
       id: editItem?.id || `${Date.now()}`,
       farmId: form.farmId || "global",
       feedType: form.feedType,
-      currentStockBags: Number.parseInt(form.currentStockBags) || 0,
-      alertThresholdBags: Number.parseInt(form.alertThresholdBags) || 10,
+      currentStockBags: Number(form.currentStockBags) || 0,
+      alertThresholdBags: Number(form.alertThresholdBags) || 10,
+      openingStockKg: Number(form.openingStockKg) || 0,
     };
     storage.saveFeedStock(item);
     const updated = storage.getFeedStocks();
     setStocks(
-      accessibleFarmIds === null
-        ? updated
-        : updated.filter(
-            (s) =>
-              s.farmId === "global" || accessibleFarmIds.includes(s.farmId),
-          ),
+      updated.filter((s) => s.farmId === "global" || farmIds.has(s.farmId)),
     );
     setDialog(false);
   };
+
+  const kgToBagsDisplay = (kg: number) =>
+    `${kg.toLocaleString()} kg / ${Math.round(kg / 50)} bags`;
 
   return (
     <div className="space-y-6" data-ocid="feed_stock.page">
@@ -112,8 +99,9 @@ export default function FeedStock() {
               data-ocid={`feed_stock.alert.item.${i + 1}`}
             >
               <AlertTriangle size={16} />
-              LOW STOCK: {s.feedType} — {s.currentStockBags} bags (threshold:{" "}
-              {s.alertThresholdBags})
+              LOW STOCK: {s.feedType} —{" "}
+              {kgToBagsDisplay(s.currentStockBags * 50)} (threshold:{" "}
+              {s.alertThresholdBags} bags)
             </div>
           ))}
         </div>
@@ -133,7 +121,8 @@ export default function FeedStock() {
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-2">Farm</th>
                 <th className="text-left p-2">Feed Type</th>
-                <th className="text-right p-2">Stock (Bags)</th>
+                <th className="text-right p-2">Opening (kg)</th>
+                <th className="text-right p-2">Stock (Bags / kg)</th>
                 <th className="text-right p-2">Alert At</th>
                 <th className="text-left p-2">Status</th>
                 <th className="p-2" />
@@ -151,12 +140,21 @@ export default function FeedStock() {
                       ? "Global"
                       : farms.find((f) => f.id === s.farmId)?.name || s.farmId}
                   </td>
-                  <td className="p-2">{s.feedType}</td>
-                  <td className="p-2 text-right font-medium">
-                    {s.currentStockBags}
+                  <td className="p-2">
+                    <Badge variant="outline">{s.feedType}</Badge>
                   </td>
                   <td className="p-2 text-right text-muted-foreground">
-                    {s.alertThresholdBags}
+                    {(s.openingStockKg ?? 0).toLocaleString()} kg
+                  </td>
+                  <td className="p-2 text-right font-medium">
+                    {s.currentStockBags} bags
+                    <br />
+                    <span className="text-xs text-muted-foreground font-normal">
+                      {(s.currentStockBags * 50).toLocaleString()} kg
+                    </span>
+                  </td>
+                  <td className="p-2 text-right text-muted-foreground">
+                    {s.alertThresholdBags} bags
                   </td>
                   <td className="p-2">
                     <Badge
@@ -225,12 +223,23 @@ export default function FeedStock() {
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="">Select Type...</option>
-                {FEED_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
+                {feedTypes.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <Label>Opening Stock (kg)</Label>
+              <Input
+                data-ocid="feed_stock.opening_kg.input"
+                type="number"
+                value={form.openingStockKg}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, openingStockKg: e.target.value }))
+                }
+              />
             </div>
             <div>
               <Label>Current Stock (Bags)</Label>

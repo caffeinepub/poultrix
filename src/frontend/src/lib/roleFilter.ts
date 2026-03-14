@@ -8,26 +8,32 @@ export function useAccessibleFarmIds(): string[] | null {
 
   return useMemo(() => {
     if (!currentUser) return [];
-    const farms = storage.getFarms();
+    const allFarms = storage.getFarms();
     if (currentUser.role === "SuperAdmin") return null;
+
+    // For all non-SuperAdmin roles, first filter farms by companyId if present
+    const companyFarms = currentUser.companyId
+      ? allFarms.filter((f) => f.companyId === currentUser.companyId)
+      : allFarms;
+
     if (currentUser.role === "CompanyAdmin") {
-      return farms
-        .filter((f) => f.companyId === currentUser.companyId)
-        .map((f) => f.id);
+      return companyFarms.map((f) => f.id);
     }
     if (currentUser.role === "Manager") {
-      const zoneFarmIds = farms
+      const zoneFarmIds = companyFarms
         .filter(
           (f) => f.zoneId && currentUser.assignedZoneIds?.includes(f.zoneId),
         )
         .map((f) => f.id);
-      const branchFarmIds = farms
+      const branchFarmIds = companyFarms
         .filter(
           (f) =>
             f.branchId && currentUser.assignedBranchIds?.includes(f.branchId),
         )
         .map((f) => f.id);
-      const fromAssignment = currentUser.assignedFarmIds || [];
+      const fromAssignment = (currentUser.assignedFarmIds || []).filter((id) =>
+        companyFarms.some((f) => f.id === id),
+      );
       return [
         ...new Set([...zoneFarmIds, ...branchFarmIds, ...fromAssignment]),
       ];
@@ -37,16 +43,21 @@ export function useAccessibleFarmIds(): string[] | null {
       currentUser.role === "Dealer" ||
       currentUser.role === "Farmer"
     ) {
-      return currentUser.assignedFarmIds || [];
+      const assigned = currentUser.assignedFarmIds || [];
+      return assigned.filter((id) => companyFarms.some((f) => f.id === id));
     }
     if (currentUser.role === "Staff") {
       if (currentUser.assignedShedId) {
         const shed = storage
           .getSheds()
           .find((s) => s.id === currentUser.assignedShedId);
-        return shed ? [shed.farmId] : currentUser.assignedFarmIds || [];
+        if (shed) {
+          const farm = companyFarms.find((f) => f.id === shed.farmId);
+          return farm ? [farm.id] : [];
+        }
       }
-      return currentUser.assignedFarmIds || [];
+      const assigned = currentUser.assignedFarmIds || [];
+      return assigned.filter((id) => companyFarms.some((f) => f.id === id));
     }
     return [];
   }, [currentUser]);
@@ -58,4 +69,47 @@ export function filterByFarms<T extends { farmId: string }>(
 ): T[] {
   if (accessibleFarmIds === null) return items;
   return items.filter((item) => accessibleFarmIds.includes(item.farmId));
+}
+
+/**
+ * Returns company-scoped data for the current user.
+ * SuperAdmin sees all data (companyId = undefined).
+ * All others see only their own company's data, further filtered by role assignment.
+ */
+export function useCompanyScope() {
+  const { currentUser } = useAuth();
+  const accessibleFarmIds = useAccessibleFarmIds();
+
+  return useMemo(() => {
+    const isSuperAdmin = currentUser?.role === "SuperAdmin";
+    const companyId = isSuperAdmin ? undefined : currentUser?.companyId;
+
+    const farms = isSuperAdmin
+      ? storage.getFarms()
+      : storage
+          .getFarmsByCompany(companyId)
+          .filter(
+            (f) =>
+              accessibleFarmIds === null || accessibleFarmIds.includes(f.id),
+          );
+
+    const zones = storage.getZonesByCompany(companyId);
+    const branches = storage.getBranchesByCompany(companyId);
+    const users = storage.getUsersByCompany(companyId);
+    const gcSchemes = storage.getGCSchemesByCompany(companyId);
+    const feedTypes = storage.getFeedTypesByCompany(companyId);
+    const feedSuppliers = storage.getFeedSuppliersByCompany(companyId);
+
+    return {
+      farms,
+      zones,
+      branches,
+      users,
+      gcSchemes,
+      feedTypes,
+      feedSuppliers,
+      companyId,
+      isSuperAdmin,
+    };
+  }, [currentUser, accessibleFarmIds]);
 }

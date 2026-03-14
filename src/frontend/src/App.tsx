@@ -8,19 +8,33 @@ import ChicksPlacement from "./pages/ChicksPlacement";
 import Companies from "./pages/Companies";
 import DailyEntry from "./pages/DailyEntry";
 import Dashboard from "./pages/Dashboard";
+import EmployeeDashboard from "./pages/EmployeeDashboard";
+import ExpenseManagement from "./pages/ExpenseManagement";
 import FarmDashboard from "./pages/FarmDashboard";
+import FarmerLedger from "./pages/FarmerLedger";
+import FarmerSettlementReport from "./pages/FarmerSettlementReport";
 import Farms from "./pages/Farms";
 import FeedIssue from "./pages/FeedIssue";
 import FeedPurchase from "./pages/FeedPurchase";
 import FeedStock from "./pages/FeedStock";
+import FeedStockReports from "./pages/FeedStockReports";
+import FeedSuppliers from "./pages/FeedSuppliers";
+import FeedTypes from "./pages/FeedTypes";
+import FinanceDashboard from "./pages/FinanceDashboard";
 import GCProduction from "./pages/GCProduction";
 import GCSchemes from "./pages/GCSchemes";
 import GCSettlementReport from "./pages/GCSettlementReport";
 import Login from "./pages/Login";
+import MyTeam from "./pages/MyTeam";
 import Payments from "./pages/Payments";
 import PerformanceReport from "./pages/PerformanceReport";
+import ProductionSettlements from "./pages/ProductionSettlements";
 import Receipts from "./pages/Receipts";
 import Reports from "./pages/Reports";
+import SubscriptionDashboard from "./pages/SubscriptionDashboard";
+import SubscriptionInvoices from "./pages/SubscriptionInvoices";
+import SubscriptionManagement from "./pages/SubscriptionManagement";
+import SubscriptionPayments from "./pages/SubscriptionPayments";
 import UserManagement from "./pages/UserManagement";
 import Zones from "./pages/Zones";
 
@@ -38,8 +52,20 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route
+              index
+              element={<Navigate to="/employee-dashboard" replace />}
+            />
+            <Route path="employee-dashboard" element={<EmployeeDashboard />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route
+              path="my-team"
+              element={
+                <ProtectedRoute roles={["CompanyAdmin", "Dealer", "Farmer"]}>
+                  <MyTeam />
+                </ProtectedRoute>
+              }
+            />
             <Route path="farms" element={<Farms />} />
             <Route
               path="farm-dashboard/:farmId"
@@ -54,6 +80,39 @@ export default function App() {
             <Route path="feed/purchase" element={<FeedPurchase />} />
             <Route path="feed/stock" element={<FeedStock />} />
             <Route path="feed/issue" element={<FeedIssue />} />
+            <Route
+              path="feed/types"
+              element={
+                <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
+                  <FeedTypes />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="feed/suppliers"
+              element={
+                <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
+                  <FeedSuppliers />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="feed/reports"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                    "Farmer",
+                    "Dealer",
+                  ]}
+                >
+                  <FeedStockReports />
+                </ProtectedRoute>
+              }
+            />
             <Route path="sales" element={<BirdSales />} />
             <Route path="reports" element={<Reports />} />
             <Route
@@ -102,6 +161,73 @@ export default function App() {
               element={
                 <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
                   <Branches />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="finance/dashboard"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                    "Farmer",
+                  ]}
+                >
+                  <FinanceDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="finance/settlements"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                    "Farmer",
+                  ]}
+                >
+                  <ProductionSettlements />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="finance/ledger"
+              element={
+                <ProtectedRoute
+                  roles={["SuperAdmin", "CompanyAdmin", "Farmer"]}
+                >
+                  <FarmerLedger />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="finance/expenses"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                  ]}
+                >
+                  <ExpenseManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="finance/settlement-report"
+              element={
+                <ProtectedRoute
+                  roles={["SuperAdmin", "CompanyAdmin", "Manager", "Farmer"]}
+                >
+                  <FarmerSettlementReport />
                 </ProtectedRoute>
               }
             />
@@ -161,6 +287,46 @@ export default function App() {
                   ]}
                 >
                   <GCSettlementReport />
+                </ProtectedRoute>
+              }
+            />
+            {/* Subscription & Billing Routes */}
+            <Route
+              path="billing/dashboard"
+              element={<SubscriptionDashboard />}
+            />
+            <Route
+              path="billing/manage"
+              element={
+                <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
+                  <SubscriptionManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="billing/invoices"
+              element={
+                <ProtectedRoute
+                  roles={[
+                    "SuperAdmin",
+                    "CompanyAdmin",
+                    "Manager",
+                    "Supervisor",
+                    "Farmer",
+                    "Dealer",
+                  ]}
+                >
+                  <SubscriptionInvoices />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="billing/payments"
+              element={
+                <ProtectedRoute
+                  roles={["SuperAdmin", "CompanyAdmin", "Farmer", "Dealer"]}
+                >
+                  <SubscriptionPayments />
                 </ProtectedRoute>
               }
             />

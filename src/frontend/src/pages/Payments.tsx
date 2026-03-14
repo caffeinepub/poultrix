@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccessibleFarmIds } from "@/lib/roleFilter";
+import { useCompanyScope } from "@/lib/roleFilter";
 import { type Payment, storage } from "@/lib/storage";
 import { DollarSign, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -10,17 +10,11 @@ import { useState } from "react";
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Payments() {
-  const accessibleFarmIds = useAccessibleFarmIds();
-  const allFarms = storage.getFarms();
-  const farms =
-    accessibleFarmIds === null
-      ? allFarms
-      : allFarms.filter((f) => accessibleFarmIds.includes(f.id));
+  const { farms } = useCompanyScope();
+  const farmIds = new Set(farms.map((f) => f.id));
   const allPayments = storage.getPayments();
   const [payments, setPayments] = useState<Payment[]>(
-    accessibleFarmIds === null
-      ? allPayments
-      : allPayments.filter((p) => accessibleFarmIds.includes(p.farmId)),
+    allPayments.filter((p) => farmIds.has(p.farmId)),
   );
   const [form, setForm] = useState({
     date: today(),
@@ -44,11 +38,8 @@ export default function Payments() {
       description: form.description,
       enteredBy: form.enteredBy,
     });
-    const updated = storage.getPayments();
     setPayments(
-      accessibleFarmIds === null
-        ? updated
-        : updated.filter((p) => accessibleFarmIds.includes(p.farmId)),
+      storage.getPayments().filter((p) => farms.some((f) => f.id === p.farmId)),
     );
     setForm({
       date: today(),
@@ -62,11 +53,8 @@ export default function Payments() {
 
   const handleDelete = (id: string) => {
     storage.deletePayment(id);
-    const updated = storage.getPayments();
     setPayments(
-      accessibleFarmIds === null
-        ? updated
-        : updated.filter((p) => accessibleFarmIds.includes(p.farmId)),
+      storage.getPayments().filter((p) => farms.some((f) => f.id === p.farmId)),
     );
   };
 
