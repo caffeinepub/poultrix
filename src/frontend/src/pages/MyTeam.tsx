@@ -26,10 +26,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
-import { useCompanyScope } from "@/lib/roleFilter";
 import { type User, storage } from "@/lib/storage";
 import { Edit, KeyRound, Loader2, Trash2, UserPlus, Users } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -64,9 +63,46 @@ const emptyForm = (): FormState => ({
   active: true,
 });
 
+function safeLoadData(
+  myCompanyId: string | undefined,
+  currentUserId: string | undefined,
+) {
+  try {
+    console.log("[MyTeam] loadData called, companyId:", myCompanyId);
+    const allUsers = storage.getUsers();
+    const subUsers = allUsers.filter(
+      (u) =>
+        (u.companyId === myCompanyId || u.createdBy === currentUserId) &&
+        ["Manager", "Supervisor", "Staff"].includes(u.role),
+    );
+    const branches = storage.getBranchesByCompany(myCompanyId);
+    const zones = storage.getZonesByCompany(myCompanyId);
+    const farms = storage.getFarmsByCompany(myCompanyId);
+    const sheds = storage.getSheds();
+    console.log(
+      "[MyTeam] loadData done. subUsers:",
+      subUsers.length,
+      "branches:",
+      branches.length,
+      "farms:",
+      farms.length,
+    );
+    return { subUsers, branches, zones, farms, sheds, allUsers };
+  } catch (err) {
+    console.error("[MyTeam] loadData error:", err);
+    return {
+      subUsers: [] as User[],
+      branches: [] as ReturnType<typeof storage.getBranchesByCompany>,
+      zones: [] as ReturnType<typeof storage.getZonesByCompany>,
+      farms: [] as ReturnType<typeof storage.getFarmsByCompany>,
+      sheds: [] as ReturnType<typeof storage.getSheds>,
+      allUsers: [] as User[],
+    };
+  }
+}
+
 export default function MyTeam() {
   const { currentUser } = useAuth();
-  const [_tick, setTick] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [resetUser, setResetUser] = useState<User | null>(null);
@@ -74,31 +110,28 @@ export default function MyTeam() {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
 
-  // Determine the companyId scope for this user
+  // myCompanyId: prefer companyId, fallback to user's own id (for CompanyAdmin who IS the company)
   const myCompanyId = currentUser?.companyId || currentUser?.id;
 
-  const { users: companyUsers, branches, zones, farms } = useCompanyScope();
-  const allUsers = companyUsers;
-  const sheds = storage.getSheds();
-
-  // Only show sub-users belonging to this user's company scope
-  const subUsers = allUsers.filter(
-    (u) =>
-      (u.companyId === myCompanyId || u.createdBy === currentUser?.id) &&
-      ["Manager", "Supervisor", "Staff"].includes(u.role),
+  const loadData = useCallback(
+    () => safeLoadData(myCompanyId, currentUser?.id),
+    [myCompanyId, currentUser?.id],
   );
 
-  // Cascading selects based on form state - already scoped by company
-  const filteredBranches = branches;
-  const filteredZones = zones.filter(
-    (z) =>
-      !myCompanyId ||
-      z.companyId === myCompanyId ||
-      z.companyId === currentUser?.id,
-  );
+  const [data, setData] = useState(() => loadData());
+
+  // Refresh list whenever dialog closes
+  useEffect(() => {
+    if (!addOpen) {
+      setData(loadData());
+    }
+  }, [addOpen, loadData]);
+
+  const { subUsers, branches, zones, farms, sheds } = data;
+
+  // Cascading selects based on form state
   const filteredFarms = farms.filter(
     (f) =>
-      (!myCompanyId || f.companyId === myCompanyId) &&
       (form.assignedBranchIds.length === 0 ||
         (f.branchId && form.assignedBranchIds.includes(f.branchId))) &&
       (form.assignedZoneIds.length === 0 ||
@@ -137,25 +170,43 @@ export default function MyTeam() {
     if (!form.username.trim()) return "Username is required";
     if (!editUser && !form.password.trim()) return "Password is required";
     if (!form.role) return "Role is required";
-    const existing = allUsers.find(
-      (u) => u.username === form.username && u.id !== editUser?.id,
-    );
-    if (existing) return "Username already exists";
+    // Check against ALL users to prevent duplicate usernames
+    try {
+      const allSystemUsers = storage.getUsers();
+      const existing = allSystemUsers.find(
+        (u) =>
+          u.username.toLowerCase() === form.username.trim().toLowerCase() &&
+          u.id !== editUser?.id,
+      );
+      if (existing)
+        return "Username already exists. Please choose a different username.";
+    } catch (err) {
+      console.error("[MyTeam] validateForm error:", err);
+    }
     return null;
   }
 
   function handleSave() {
+    console.log("[MyTeam] handleSave called, form:", {
+      name: form.name,
+      username: form.username,
+      role: form.role,
+      companyId: myCompanyId,
+    });
+
     const err = validateForm();
     if (err) {
+      console.warn("[MyTeam] Validation failed:", err);
       toast.error(err);
       return;
     }
+
     setSaving(true);
-    setTimeout(() => {
+    try {
       if (editUser) {
         storage.updateUser(editUser.id, {
           name: form.name,
-          username: form.username,
+          username: form.username.trim(),
           password: form.password || editUser.password,
           role: form.role as SubUserRole,
           assignedBranchIds: form.assignedBranchIds,
@@ -164,12 +215,13 @@ export default function MyTeam() {
           assignedShedId: form.assignedShedId || undefined,
           active: form.active,
         });
-        toast.success("Sub-user updated successfully");
+        console.log("[MyTeam] User updated:", editUser.id);
+        toast.success(`${form.name} updated successfully`);
       } else {
         const newUser = storage.addUser({
-          name: form.name,
-          username: form.username,
-          password: form.password,
+          name: form.name.trim(),
+          username: form.username.trim(),
+          password: form.password.trim(),
           role: form.role as SubUserRole,
           companyId: myCompanyId,
           createdBy: currentUser?.id,
@@ -179,41 +231,66 @@ export default function MyTeam() {
           assignedShedId: form.assignedShedId || undefined,
           active: form.active,
         });
-        // Add notification for the new sub-user
-        storage.addNotification({
-          userId: newUser.id,
-          companyId: myCompanyId,
-          type: "sub_user_assigned",
-          title: "Welcome to the Team",
-          message: `You have been added to the team as a ${form.role}. Log in with your credentials to get started.`,
-          read: false,
-          createdAt: new Date().toISOString(),
-        });
-        // Notify admins
-        if (currentUser) {
+        console.log("[MyTeam] New user created:", newUser.id, newUser.username);
+
+        // Add notifications (wrapped in try/catch so notification failure doesn't break creation)
+        try {
           storage.addNotification({
-            userId: currentUser.id,
+            userId: newUser.id,
             companyId: myCompanyId,
             type: "sub_user_assigned",
-            title: "New Sub-User Created",
-            message: `${form.name} has been added as a ${form.role} to your team.`,
+            title: "Welcome to the Team",
+            message: `You have been added to the team as a ${form.role}. Log in with username: ${form.username.trim()}`,
             read: false,
             createdAt: new Date().toISOString(),
           });
+          if (currentUser) {
+            storage.addNotification({
+              userId: currentUser.id,
+              companyId: myCompanyId,
+              type: "sub_user_assigned",
+              title: "New Sub-User Created",
+              message: `${form.name} has been added as a ${form.role} to your team.`,
+              read: false,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        } catch (notifErr) {
+          console.error("[MyTeam] Notification error (non-fatal):", notifErr);
         }
-        toast.success("Sub-user created successfully");
+
+        toast.success(
+          `${form.name} created! Login: ${form.username.trim()} / ${form.password.trim()}`,
+        );
       }
+
       setSaving(false);
       setAddOpen(false);
-      setTick((t) => t + 1);
-    }, 300);
+      // Refresh list from storage
+      const freshData = safeLoadData(myCompanyId, currentUser?.id);
+      setData(freshData);
+      console.log(
+        "[MyTeam] List refreshed. Total sub-users:",
+        freshData.subUsers.length,
+      );
+    } catch (e) {
+      console.error("[MyTeam] Save error:", e);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast.error(`Failed to save: ${message}`);
+      setSaving(false);
+    }
   }
 
   function handleDelete(u: User) {
     if (!confirm(`Delete user ${u.name}? This cannot be undone.`)) return;
-    storage.deleteUser(u.id);
-    toast.success("User deleted");
-    setTick((t) => t + 1);
+    try {
+      storage.deleteUser(u.id);
+      toast.success("User deleted");
+      setData(loadData());
+    } catch (err) {
+      console.error("[MyTeam] Delete error:", err);
+      toast.error("Failed to delete user.");
+    }
   }
 
   function handleResetPassword() {
@@ -221,10 +298,16 @@ export default function MyTeam() {
       toast.error("Enter a new password");
       return;
     }
-    storage.updateUser(resetUser.id, { password: newPassword });
-    toast.success("Password reset successfully");
-    setResetUser(null);
-    setNewPassword("");
+    try {
+      storage.updateUser(resetUser.id, { password: newPassword.trim() });
+      toast.success("Password reset successfully");
+      setResetUser(null);
+      setNewPassword("");
+      setData(loadData());
+    } catch (err) {
+      console.error("[MyTeam] Password reset error:", err);
+      toast.error("Failed to reset password.");
+    }
   }
 
   function toggleMulti(
@@ -307,7 +390,7 @@ export default function MyTeam() {
                   <TableRow key={u.id} data-ocid={`my_team.item.${idx + 1}`}>
                     <TableCell className="font-medium">{u.name}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {u.employeeId || "—"}
+                      {u.employeeId || "\u2014"}
                     </TableCell>
                     <TableCell>
                       <span
@@ -323,7 +406,7 @@ export default function MyTeam() {
                     </TableCell>
                     <TableCell className="text-sm">
                       {userBranches || (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">\u2014</span>
                       )}
                     </TableCell>
                     <TableCell className="text-sm">
@@ -337,7 +420,7 @@ export default function MyTeam() {
                           ) : null}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">\u2014</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -474,12 +557,12 @@ export default function MyTeam() {
               </div>
             </div>
 
-            {/* Assigned Branch (multi-select via checkboxes) */}
-            {filteredBranches.length > 0 && (
+            {/* Assigned Branch */}
+            {branches.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Assigned Branch(es)</Label>
                 <div className="border rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto">
-                  {filteredBranches.map((b) => (
+                  {branches.map((b) => (
                     <label
                       key={b.id}
                       className="flex items-center gap-2 cursor-pointer"
@@ -506,11 +589,11 @@ export default function MyTeam() {
             )}
 
             {/* Assigned Zone */}
-            {filteredZones.length > 0 && (
+            {zones.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Assigned Zone(s)</Label>
                 <div className="border rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto">
-                  {filteredZones.map((z) => (
+                  {zones.map((z) => (
                     <label
                       key={z.id}
                       className="flex items-center gap-2 cursor-pointer"
@@ -617,7 +700,7 @@ export default function MyTeam() {
       >
         <DialogContent data-ocid="my_team.dialog">
           <DialogHeader>
-            <DialogTitle>Reset Password — {resetUser?.name}</DialogTitle>
+            <DialogTitle>Reset Password \u2014 {resetUser?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <Label htmlFor="new-pw">New Password</Label>

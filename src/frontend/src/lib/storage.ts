@@ -446,6 +446,29 @@ function seedNotifications() {
 }
 seedNotifications();
 
+// Seed test supervisor user created by demo Company Admin
+function seedSupervisor01() {
+  const users = get<User>("px_users");
+  const exists = users.find((u) => u.username === "supervisor01");
+  if (!exists) {
+    set("px_users", [
+      ...users,
+      {
+        id: "supervisor01-id",
+        username: "supervisor01",
+        password: "123456",
+        role: "Supervisor" as const,
+        name: "Test Supervisor",
+        employeeId: "EMP-SUP01",
+        companyId: "demo-company-001",
+        createdBy: "demo-1990",
+        active: true,
+      },
+    ]);
+  }
+}
+seedSupervisor01();
+
 export const storage = {
   // Users
   getUsers: () => get<User>("px_users"),

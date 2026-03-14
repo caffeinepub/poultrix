@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -15,122 +15,147 @@ import { useCompanyScope } from "@/lib/roleFilter";
 import { storage } from "@/lib/storage";
 import { Download, FileText, Printer, Search } from "lucide-react";
 import { useState } from "react";
-import * as XLSX from "xlsx";
 
 function downloadInvoicePDF(
   invoice: ReturnType<typeof storage.getSubscriptionInvoices>[number],
   userName: string,
   userRole: string,
 ) {
-  import("jspdf").then(({ default: jsPDF }) => {
-    const doc = new jsPDF();
-    const green = [34, 139, 34] as [number, number, number];
-    const darkGreen = [22, 101, 52] as [number, number, number];
+  import("jspdf")
+    .then(({ default: jsPDF }) => {
+      const doc = new jsPDF();
+      const green = [34, 139, 34] as [number, number, number];
+      const darkGreen = [22, 101, 52] as [number, number, number];
 
-    // Header box
-    doc.setFillColor(...green);
-    doc.rect(0, 0, 210, 35, "F");
-
-    // Logo area
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(10, 7, 22, 22, 3, 3, "F");
-    doc.setTextColor(...green);
-    doc.setFontSize(18);
-    doc.text("🐔", 13, 22);
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont("helvetica", "bold");
-    doc.text("POULTRIX", 38, 18);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("FARM MANAGEMENT", 38, 25);
-    doc.text("Smart Automation for Poultry Business", 38, 31);
-
-    doc.setTextColor(...darkGreen);
-    doc.setFontSize(8);
-    doc.text("India | support@poultrix.com", 10, 44);
-
-    // INVOICE title
-    doc.setFontSize(24);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 30, 30);
-    doc.text("INVOICE", 140, 50);
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Invoice No: ${invoice.invoiceNumber}`, 140, 58);
-    doc.text(`Date: ${invoice.invoiceDate}`, 140, 64);
-    doc.text(`Period: ${invoice.period}`, 140, 70);
-
-    // Client
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Bill To:", 10, 58);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(userName, 10, 65);
-    doc.text(`Role: ${userRole}`, 10, 71);
-
-    // Separator
-    doc.setDrawColor(...green);
-    doc.setLineWidth(0.5);
-    doc.line(10, 78, 200, 78);
-
-    // Table header
-    doc.setFillColor(...green);
-    doc.rect(10, 80, 190, 8, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("Description", 14, 86);
-    doc.text("Birds", 100, 86);
-    doc.text("Rate (₹/bird)", 125, 86);
-    doc.text("Amount (₹)", 162, 86);
-
-    // Row
-    doc.setTextColor(30, 30, 30);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("Monthly Subscription", 14, 97);
-    doc.text(String(invoice.totalBirds), 100, 97);
-    doc.text(`₹${invoice.perBirdRate.toFixed(2)}`, 125, 97);
-    doc.text(`₹${invoice.calculatedAmount.toFixed(2)}`, 162, 97);
-
-    if (invoice.finalAmount > invoice.calculatedAmount) {
+      doc.setFillColor(...green);
+      doc.rect(0, 0, 210, 35, "F");
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(10, 7, 22, 22, 3, 3, "F");
+      doc.setTextColor(...green);
+      doc.setFontSize(18);
+      doc.text("P", 17, 22);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bold");
+      doc.text("POULTRIX", 38, 18);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("FARM MANAGEMENT", 38, 25);
+      doc.text("Smart Automation for Poultry Business", 38, 31);
+      doc.setTextColor(...darkGreen);
       doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text(`* Minimum plan applied: ₹${invoice.minimumAmount}`, 14, 105);
-    }
+      doc.text("India | support@poultrix.com", 10, 44);
+      doc.setFontSize(24);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 30);
+      doc.text("INVOICE", 140, 50);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Invoice No: ${invoice.invoiceNumber}`, 140, 58);
+      doc.text(`Date: ${invoice.invoiceDate}`, 140, 64);
+      doc.text(`Period: ${invoice.period}`, 140, 70);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Bill To:", 10, 58);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(userName, 10, 65);
+      doc.text(`Role: ${userRole}`, 10, 71);
+      doc.setDrawColor(...green);
+      doc.setLineWidth(0.5);
+      doc.line(10, 78, 200, 78);
+      doc.setFillColor(...green);
+      doc.rect(10, 80, 190, 8, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Description", 14, 86);
+      doc.text("Birds", 100, 86);
+      doc.text("Rate (Rs/bird)", 125, 86);
+      doc.text("Amount (Rs)", 162, 86);
+      doc.setTextColor(30, 30, 30);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text("Monthly Subscription", 14, 97);
+      doc.text(String(invoice.totalBirds), 100, 97);
+      doc.text(`Rs${invoice.perBirdRate.toFixed(2)}`, 125, 97);
+      doc.text(`Rs${invoice.calculatedAmount.toFixed(2)}`, 162, 97);
+      if (invoice.finalAmount > invoice.calculatedAmount) {
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`* Minimum plan applied: Rs${invoice.minimumAmount}`, 14, 105);
+      }
+      doc.setFillColor(240, 253, 244);
+      doc.roundedRect(130, 110, 70, 18, 3, 3, "F");
+      doc.setDrawColor(...green);
+      doc.roundedRect(130, 110, 70, 18, 3, 3, "D");
+      doc.setTextColor(...darkGreen);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("TOTAL", 138, 120);
+      doc.text(`Rs${invoice.finalAmount.toFixed(2)}`, 170, 120);
+      doc.setFillColor(...green);
+      doc.roundedRect(10, 112, 30, 10, 2, 2, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.text("PAID", 19, 119);
+      doc.setDrawColor(...green);
+      doc.line(10, 275, 200, 275);
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text("Thank you for using Poultrix", 75, 282);
+      doc.save(`invoice-${invoice.invoiceNumber}.pdf`);
+    })
+    .catch((err) => {
+      console.error("[PDF] Failed to load jspdf:", err);
+      alert("PDF download failed. Please try again.");
+    });
+}
 
-    // Total box
-    doc.setFillColor(240, 253, 244);
-    doc.roundedRect(130, 110, 70, 18, 3, 3, "F");
-    doc.setDrawColor(...green);
-    doc.roundedRect(130, 110, 70, 18, 3, 3, "D");
-    doc.setTextColor(...darkGreen);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("TOTAL", 138, 120);
-    doc.text(`₹${invoice.finalAmount.toFixed(2)}`, 170, 120);
-
-    // Status badge
-    doc.setFillColor(...green);
-    doc.roundedRect(10, 112, 30, 10, 2, 2, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.text("PAID", 19, 119);
-
-    // Footer
-    doc.setDrawColor(...green);
-    doc.line(10, 275, 200, 275);
-    doc.setTextColor(100, 100, 100);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text("Thank you for using Poultrix", 75, 282);
-
-    doc.save(`invoice-${invoice.invoiceNumber}.pdf`);
-  });
+function downloadInvoiceExcel(
+  invoice: ReturnType<typeof storage.getSubscriptionInvoices>[number],
+  userName: string,
+  userRole: string,
+) {
+  import("xlsx")
+    .then((XLSX) => {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["POULTRIX FARM MANAGEMENT"],
+        ["India | support@poultrix.com"],
+        [],
+        ["Invoice Number", invoice.invoiceNumber],
+        ["Invoice Date", invoice.invoiceDate],
+        ["Period", invoice.period],
+        ["Client", userName],
+        ["Role", userRole],
+        [],
+        [
+          "Description",
+          "Birds",
+          "Rate (Rs/bird)",
+          "Calculated (Rs)",
+          "Final (Rs)",
+        ],
+        [
+          "Monthly Subscription",
+          invoice.totalBirds,
+          invoice.perBirdRate,
+          invoice.calculatedAmount,
+          invoice.finalAmount,
+        ],
+        [],
+        ["Total", "", "", "", invoice.finalAmount],
+        ["Status", "PAID"],
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Invoice");
+      XLSX.writeFile(wb, `invoice-${invoice.invoiceNumber}.xlsx`);
+    })
+    .catch((err) => {
+      console.error("[Excel] Failed to load xlsx:", err);
+      alert("Excel download failed. Please try again.");
+    });
 }
 
 export default function SubscriptionInvoices() {
@@ -153,35 +178,6 @@ export default function SubscriptionInvoices() {
         user?.name?.toLowerCase().includes(search.toLowerCase())
       );
     });
-  }
-
-  function handleExcelDownload(inv: (typeof invoices)[number]) {
-    const user = allUsers.find((u) => u.id === inv.userId);
-    const ws = XLSX.utils.aoa_to_sheet([
-      ["POULTRIX FARM MANAGEMENT"],
-      ["India | support@poultrix.com"],
-      [],
-      ["Invoice Number", inv.invoiceNumber],
-      ["Invoice Date", inv.invoiceDate],
-      ["Period", inv.period],
-      ["Client", user?.name ?? ""],
-      ["Role", user?.role ?? ""],
-      [],
-      ["Description", "Birds", "Rate (₹/bird)", "Calculated (₹)", "Final (₹)"],
-      [
-        "Monthly Subscription",
-        inv.totalBirds,
-        inv.perBirdRate,
-        inv.calculatedAmount,
-        inv.finalAmount,
-      ],
-      [],
-      ["Total", "", "", "", inv.finalAmount],
-      ["Status", "PAID"],
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Invoice");
-    XLSX.writeFile(wb, `invoice-${inv.invoiceNumber}.xlsx`);
   }
 
   return (
@@ -232,7 +228,7 @@ export default function SubscriptionInvoices() {
                   <TableHead>Birds</TableHead>
                   <TableHead>Rate</TableHead>
                   <TableHead>Calculated</TableHead>
-                  <TableHead>Final (₹)</TableHead>
+                  <TableHead>Final (Rs)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Actions</TableHead>
@@ -253,7 +249,7 @@ export default function SubscriptionInvoices() {
                         <TableCell>
                           <div>
                             <p className="font-medium text-sm">
-                              {user?.name ?? "—"}
+                              {user?.name ?? "\u2014"}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {user?.role}
@@ -263,10 +259,10 @@ export default function SubscriptionInvoices() {
                       )}
                       <TableCell>{inv.period}</TableCell>
                       <TableCell>{inv.totalBirds.toLocaleString()}</TableCell>
-                      <TableCell>₹{inv.perBirdRate.toFixed(2)}</TableCell>
-                      <TableCell>₹{inv.calculatedAmount.toFixed(2)}</TableCell>
+                      <TableCell>Rs{inv.perBirdRate.toFixed(2)}</TableCell>
+                      <TableCell>Rs{inv.calculatedAmount.toFixed(2)}</TableCell>
                       <TableCell className="font-semibold">
-                        ₹{inv.finalAmount.toFixed(2)}
+                        Rs{inv.finalAmount.toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <Badge className="bg-green-100 text-green-700 border-green-200">
@@ -297,7 +293,13 @@ export default function SubscriptionInvoices() {
                             size="sm"
                             variant="outline"
                             data-ocid={`billing.invoices.excel.button.${idx + 1}`}
-                            onClick={() => handleExcelDownload(inv)}
+                            onClick={() =>
+                              downloadInvoiceExcel(
+                                inv,
+                                user?.name ?? "Client",
+                                user?.role ?? "",
+                              )
+                            }
                             title="Download Excel"
                           >
                             <FileText size={14} />
