@@ -1,3 +1,4 @@
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,9 +28,12 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
+import { logDelete } from "@/lib/auditHelper";
+import { usePermissions } from "@/lib/permissions";
+import { printRecord } from "@/lib/printRecord";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { type Expense, storage } from "@/lib/storage";
-import { Check, Plus, Receipt, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, Printer, Receipt, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -52,6 +56,7 @@ type ExpenseForm = {
 
 export default function ExpenseManagement() {
   const { currentUser } = useAuth();
+  const { canDelete, canPrint } = usePermissions();
   const { farms } = useCompanyScope();
   const isAdmin =
     currentUser?.role === "SuperAdmin" || currentUser?.role === "CompanyAdmin";
@@ -62,6 +67,7 @@ export default function ExpenseManagement() {
     storage.getExpenses().filter((e) => farms.some((f) => f.id === e.farmId)),
   );
   const [showDialog, setShowDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [filterFarm, setFilterFarm] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [form, setForm] = useState<ExpenseForm>({
@@ -143,9 +149,17 @@ export default function ExpenseManagement() {
     toast.success("Expense rejected.");
   };
 
-  const handleDelete = (id: string) => {
-    storage.deleteExpense(id);
+  const confirmDeleteExpense = () => {
+    if (!deleteTarget) return;
+    logDelete({
+      module: "Expenses",
+      recordId: deleteTarget.id,
+      recordSummary: `${deleteTarget.type} | ${deleteTarget.date}`,
+      user: currentUser,
+    });
+    storage.deleteExpense(deleteTarget.id);
     refreshExpenses();
+    setDeleteTarget(null);
     toast.success("Expense deleted.");
   };
 
@@ -296,14 +310,52 @@ export default function ExpenseManagement() {
                           </TableCell>
                           {isAdmin && (
                             <TableCell className="text-right">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                data-ocid={`expenses.delete_button.${idx + 1}`}
-                                onClick={() => handleDelete(e.id)}
-                              >
-                                <Trash2 size={14} className="text-red-500" />
-                              </Button>
+                              <div className="flex gap-1 justify-end">
+                                {canPrint && (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    data-ocid={`expenses.print_button.${idx + 1}`}
+                                    onClick={() => {
+                                      const farm = farms.find(
+                                        (f) => f.id === e.farmId,
+                                      );
+                                      printRecord({
+                                        farmName: farm?.name,
+                                        date: e.date,
+                                        module: "Expense Management",
+                                        generatedBy: currentUser?.name,
+                                        entryDetails: {
+                                          Date: e.date,
+                                          Type: e.type,
+                                          Description: e.description,
+                                          Amount: String(e.amount),
+                                          Status: e.status,
+                                          "Added By": e.addedBy,
+                                        },
+                                      });
+                                    }}
+                                  >
+                                    <Printer
+                                      size={14}
+                                      className="text-green-600"
+                                    />
+                                  </Button>
+                                )}
+                                {canDelete && (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    data-ocid={`expenses.delete_button.${idx + 1}`}
+                                    onClick={() => setDeleteTarget(e)}
+                                  >
+                                    <Trash2
+                                      size={14}
+                                      className="text-red-500"
+                                    />
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>
@@ -509,6 +561,19 @@ export default function ExpenseManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDeleteExpense}
+        recordSummary={
+          deleteTarget
+            ? `${deleteTarget.type} | ${deleteTarget.date}`
+            : undefined
+        }
+      />
     </div>
   );
 }

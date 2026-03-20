@@ -1,16 +1,30 @@
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/context/AuthContext";
+import { logDelete } from "@/lib/auditHelper";
+import { usePermissions } from "@/lib/permissions";
+import { printRecord } from "@/lib/printRecord";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { type FeedIssue as FI, storage } from "@/lib/storage";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function FeedIssue() {
+  const { currentUser } = useAuth();
+  const { canUpdate, canDelete, canPrint } = usePermissions();
   const { farms, zones, branches, feedTypes } = useCompanyScope();
   const sheds = storage.getSheds();
 
@@ -19,6 +33,8 @@ export default function FeedIssue() {
   const [issues, setIssues] = useState<FI[]>(
     allIssues.filter((i) => farmIds.has(i.farmId)),
   );
+  const [deleteTarget, setDeleteTarget] = useState<FI | null>(null);
+  const [editIssue, setEditIssue] = useState<FI | null>(null);
   const [form, setForm] = useState({
     zoneId: "",
     branchId: "",
@@ -59,6 +75,11 @@ export default function FeedIssue() {
       ? Number(form.quantityKgInput) || 0
       : (Number(form.quantityBags) || 0) * 50;
 
+  const refreshIssues = () => {
+    const updated = storage.getFeedIssues();
+    setIssues(updated.filter((i) => farms.some((f) => f.id === i.farmId)));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.farmId || !form.feedType || bags === 0) return;
@@ -72,8 +93,7 @@ export default function FeedIssue() {
       zoneId: form.zoneId || undefined,
       branchId: form.branchId || undefined,
     });
-    const updated = storage.getFeedIssues();
-    setIssues(updated.filter((i) => farms.some((f) => f.id === i.farmId)));
+    refreshIssues();
     setForm({
       zoneId: "",
       branchId: "",
@@ -87,6 +107,19 @@ export default function FeedIssue() {
     });
   };
 
+  const confirmDeleteIssue = () => {
+    if (!deleteTarget) return;
+    logDelete({
+      module: "Feed Issue",
+      recordId: deleteTarget.id,
+      recordSummary: `${deleteTarget.feedType} | ${deleteTarget.issueDate}`,
+      user: currentUser,
+    });
+    storage.deleteFeedIssue(deleteTarget.id);
+    refreshIssues();
+    setDeleteTarget(null);
+  };
+
   return (
     <div className="space-y-6" data-ocid="feed_issue.page">
       <h2 className="text-2xl font-bold">Feed Issue to Farm</h2>
@@ -96,7 +129,6 @@ export default function FeedIssue() {
             onSubmit={handleSubmit}
             className="grid grid-cols-2 md:grid-cols-3 gap-4"
           >
-            {/* Zone */}
             <div>
               <Label>Zone</Label>
               <select
@@ -121,8 +153,6 @@ export default function FeedIssue() {
                 ))}
               </select>
             </div>
-
-            {/* Branch */}
             <div>
               <Label>Branch</Label>
               <select
@@ -146,8 +176,6 @@ export default function FeedIssue() {
                 ))}
               </select>
             </div>
-
-            {/* Farm */}
             <div>
               <Label>Farm *</Label>
               <select
@@ -155,11 +183,7 @@ export default function FeedIssue() {
                 required
                 value={form.farmId}
                 onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    farmId: e.target.value,
-                    shedId: "",
-                  }))
+                  setForm((f) => ({ ...f, farmId: e.target.value, shedId: "" }))
                 }
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
@@ -171,8 +195,6 @@ export default function FeedIssue() {
                 ))}
               </select>
             </div>
-
-            {/* Shed */}
             <div>
               <Label>Shed</Label>
               <select
@@ -192,8 +214,6 @@ export default function FeedIssue() {
                 ))}
               </select>
             </div>
-
-            {/* Feed Type */}
             <div>
               <Label>Feed Type *</Label>
               <select
@@ -213,8 +233,6 @@ export default function FeedIssue() {
                 ))}
               </select>
             </div>
-
-            {/* Quantity with unit toggle */}
             <div>
               <Label>Quantity</Label>
               <div className="flex gap-2 items-start mt-1">
@@ -222,11 +240,7 @@ export default function FeedIssue() {
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, unit: "bags" }))}
-                    className={`px-2 py-1.5 text-xs font-medium transition-colors ${
-                      form.unit === "bags"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background hover:bg-muted"
-                    }`}
+                    className={`px-2 py-1.5 text-xs font-medium transition-colors ${form.unit === "bags" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
                     data-ocid="feed_issue.unit_bags.toggle"
                   >
                     Bags
@@ -234,60 +248,40 @@ export default function FeedIssue() {
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, unit: "kg" }))}
-                    className={`px-2 py-1.5 text-xs font-medium transition-colors ${
-                      form.unit === "kg"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background hover:bg-muted"
-                    }`}
+                    className={`px-2 py-1.5 text-xs font-medium transition-colors ${form.unit === "kg" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
                     data-ocid="feed_issue.unit_kg.toggle"
                   >
                     KG
                   </button>
                 </div>
                 {form.unit === "bags" ? (
-                  <div className="flex-1">
-                    <Input
-                      data-ocid="feed_issue.qty.input"
-                      type="number"
-                      min="0"
-                      value={form.quantityBags}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, quantityBags: e.target.value }))
-                      }
-                      placeholder="Bags"
-                    />
-                    {bags > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        = {bags * 50} kg
-                      </p>
-                    )}
-                  </div>
+                  <Input
+                    data-ocid="feed_issue.qty.input"
+                    type="number"
+                    min="0"
+                    value={form.quantityBags}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, quantityBags: e.target.value }))
+                    }
+                    placeholder="Bags"
+                  />
                 ) : (
-                  <div className="flex-1">
-                    <Input
-                      data-ocid="feed_issue.qty_kg.input"
-                      type="number"
-                      min="0"
-                      value={form.quantityKgInput}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          quantityKgInput: e.target.value,
-                        }))
-                      }
-                      placeholder="KG"
-                    />
-                    {kg > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        ≈ {Math.round(kg / 50)} bags
-                      </p>
-                    )}
-                  </div>
+                  <Input
+                    data-ocid="feed_issue.qty_kg.input"
+                    type="number"
+                    min="0"
+                    value={form.quantityKgInput}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        quantityKgInput: e.target.value,
+                      }))
+                    }
+                    placeholder="KG"
+                  />
                 )}
               </div>
             </div>
-
-            {/* Date */}
             <div>
               <Label>Issue Date</Label>
               <Input
@@ -299,7 +293,6 @@ export default function FeedIssue() {
                 }
               />
             </div>
-
             <div className="flex items-end col-span-2 md:col-span-1">
               <Button
                 type="submit"
@@ -332,6 +325,7 @@ export default function FeedIssue() {
                 <th className="text-left p-2">Feed Type</th>
                 <th className="text-right p-2">Bags</th>
                 <th className="text-right p-2">KG</th>
+                <th className="p-2" />
               </tr>
             </thead>
             <tbody>
@@ -343,10 +337,11 @@ export default function FeedIssue() {
                 >
                   <td className="p-2">{i.issueDate}</td>
                   <td className="p-2 text-muted-foreground">
-                    {zones.find((z) => z.id === i.zoneId)?.name || "—"}
+                    {zones.find((z) => z.id === i.zoneId)?.name || "\u2014"}
                   </td>
                   <td className="p-2 text-muted-foreground">
-                    {branches.find((b) => b.id === i.branchId)?.name || "—"}
+                    {branches.find((b) => b.id === i.branchId)?.name ||
+                      "\u2014"}
                   </td>
                   <td className="p-2">
                     {farms.find((f) => f.id === i.farmId)?.name || "-"}
@@ -361,11 +356,152 @@ export default function FeedIssue() {
                   <td className="p-2 text-right text-muted-foreground">
                     {i.quantityKg ?? i.quantityBags * 50}
                   </td>
+                  <td className="p-2">
+                    <div className="flex gap-1 justify-end">
+                      {canUpdate && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setEditIssue({ ...i })}
+                          data-ocid={`feed_issue.edit_button.${idx + 1}`}
+                          title="Edit"
+                        >
+                          <Pencil size={13} className="text-blue-600" />
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(i)}
+                          data-ocid={`feed_issue.delete_button.${idx + 1}`}
+                          title="Delete"
+                        >
+                          <Trash2 size={13} className="text-red-600" />
+                        </Button>
+                      )}
+                      {canPrint && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            const farm = farms.find((f) => f.id === i.farmId);
+                            printRecord({
+                              farmName: farm?.name,
+                              shedName: sheds.find((s) => s.id === i.shedId)
+                                ?.name,
+                              date: i.issueDate,
+                              module: "Feed Issue",
+                              generatedBy: currentUser?.name,
+                              entryDetails: {
+                                "Feed Type": i.feedType,
+                                "Quantity (Bags)": i.quantityBags,
+                                "Quantity (KG)":
+                                  i.quantityKg ?? i.quantityBags * 50,
+                                Date: i.issueDate,
+                              },
+                            });
+                          }}
+                          data-ocid={`feed_issue.print_button.${idx + 1}`}
+                          title="Print"
+                        >
+                          <Printer size={13} className="text-green-600" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDeleteIssue}
+        recordSummary={
+          deleteTarget
+            ? `${deleteTarget.feedType} | ${deleteTarget.issueDate}`
+            : undefined
+        }
+      />
+
+      {editIssue && (
+        <Dialog
+          open={!!editIssue}
+          onOpenChange={(v) => {
+            if (!v) setEditIssue(null);
+          }}
+        >
+          <DialogContent data-ocid="feed_issue.edit.dialog">
+            <DialogHeader>
+              <DialogTitle>Edit Feed Issue</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Feed Type</Label>
+                <Input
+                  value={editIssue.feedType}
+                  onChange={(e) =>
+                    setEditIssue((p) =>
+                      p ? { ...p, feedType: e.target.value } : p,
+                    )
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Quantity (Bags)</Label>
+                  <Input
+                    type="number"
+                    value={editIssue.quantityBags}
+                    onChange={(e) =>
+                      setEditIssue((p) =>
+                        p ? { ...p, quantityBags: Number(e.target.value) } : p,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Issue Date</Label>
+                  <Input
+                    type="date"
+                    value={editIssue.issueDate}
+                    onChange={(e) =>
+                      setEditIssue((p) =>
+                        p ? { ...p, issueDate: e.target.value } : p,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditIssue(null)}
+                data-ocid="feed_issue.edit.cancel_button"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!editIssue) return;
+                  storage.updateFeedIssue(editIssue.id, editIssue);
+                  refreshIssues();
+                  setEditIssue(null);
+                }}
+                data-ocid="feed_issue.edit.save_button"
+              >
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

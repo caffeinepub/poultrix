@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { type Branch, type User, storage } from "@/lib/storage";
 import {
+  Copy,
   GitBranch,
   Pencil,
   Plus,
@@ -25,6 +26,7 @@ import {
   UserX,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type FormState = {
   name: string;
@@ -89,6 +91,10 @@ export default function UserManagement() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [identityResult, setIdentityResult] = useState<{
+    serialNumber: string;
+    username: string;
+  } | null>(null);
 
   const [branchDialog, setBranchDialog] = useState(false);
   const [branchEditId, setBranchEditId] = useState<string | null>(null);
@@ -172,7 +178,7 @@ export default function UserManagement() {
   };
 
   const save = () => {
-    if (!form.name || !form.username) return;
+    if (!form.name) return;
     const companyId = isSuperAdmin
       ? form.companyId || undefined
       : currentUser?.companyId;
@@ -195,9 +201,9 @@ export default function UserManagement() {
       storage.updateUser(editId, updates);
     } else {
       if (!form.password) return;
-      storage.addUser({
+      const newUser = storage.addUser({
         name: form.name,
-        username: form.username,
+        username: form.username?.trim() || "",
         password: form.password,
         role: form.role,
         companyId,
@@ -209,6 +215,10 @@ export default function UserManagement() {
         assignedBranchIds: form.assignedBranchIds,
         assignedShedId: form.assignedShedId || undefined,
         active: form.active,
+      });
+      setIdentityResult({
+        serialNumber: newUser.serialNumber ?? "",
+        username: newUser.username,
       });
     }
     setUsers(scopedUsers);
@@ -360,6 +370,7 @@ export default function UserManagement() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-2">#</th>
+                    <th className="text-left p-2">Serial No.</th>
                     <th className="text-left p-2">Name</th>
                     <th className="text-left p-2">Emp ID</th>
                     <th className="text-left p-2">Username</th>
@@ -379,6 +390,11 @@ export default function UserManagement() {
                       data-ocid={`users.row.${i + 1}`}
                     >
                       <td className="p-2 text-muted-foreground">{i + 1}</td>
+                      <td className="p-2">
+                        <code className="text-xs font-mono bg-muted px-1 rounded">
+                          {u.serialNumber || "—"}
+                        </code>
+                      </td>
                       <td className="p-2 font-medium">{u.name}</td>
                       <td className="p-2 font-mono text-xs text-muted-foreground">
                         {u.employeeId || "-"}
@@ -558,17 +574,23 @@ export default function UserManagement() {
                 placeholder="Full name"
               />
             </div>
-            <div>
-              <Label>Username *</Label>
-              <Input
-                data-ocid="users.username.input"
-                value={form.username}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, username: e.target.value }))
-                }
-                placeholder="username"
-              />
-            </div>
+            {editId && (
+              <div>
+                <Label>Username (auto-generated, read-only)</Label>
+                <Input
+                  data-ocid="users.username.input"
+                  value={form.username}
+                  readOnly
+                  className="bg-muted/50 font-mono text-sm"
+                />
+              </div>
+            )}
+            {!editId && (
+              <p className="text-xs text-muted-foreground bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                Username will be auto-generated from Name + Last 4 digits of
+                Mobile Number
+              </p>
+            )}
             <div>
               <Label>
                 {editId ? "New Password (leave blank to keep)" : "Password *"}
@@ -964,6 +986,82 @@ export default function UserManagement() {
               }
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Identity Result Modal */}
+      <Dialog
+        open={!!identityResult}
+        onOpenChange={() => setIdentityResult(null)}
+      >
+        <DialogContent className="max-w-md" data-ocid="users.identity.dialog">
+          <DialogHeader>
+            <DialogTitle className="text-green-700">
+              ✓ User Created Successfully
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Share these credentials with the new user:
+            </p>
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Serial Number
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="flex-1 text-sm font-mono bg-background border rounded px-3 py-1.5">
+                    {identityResult?.serialNumber}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        identityResult?.serialNumber ?? "",
+                      );
+                      toast.success("Copied!");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Auto-Generated Username
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="flex-1 text-sm font-mono bg-background border rounded px-3 py-1.5">
+                    {identityResult?.username}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        identityResult?.username ?? "",
+                      );
+                      toast.success("Copied!");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Generated from: Name + Last 4 digits of mobile number
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setIdentityResult(null)}
+              data-ocid="users.identity.close_button"
+            >
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

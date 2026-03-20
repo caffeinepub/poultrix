@@ -26,8 +26,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
+import { getRoleDefaults } from "@/lib/permissions";
 import { type User, storage } from "@/lib/storage";
-import { Edit, KeyRound, Loader2, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  Copy,
+  Edit,
+  KeyRound,
+  Loader2,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -47,8 +56,12 @@ type FormState = {
   assignedBranchIds: string[];
   assignedZoneIds: string[];
   assignedFarmIds: string[];
+  mobileNumber: string;
   assignedShedId: string;
   active: boolean;
+  canUpdate?: boolean;
+  canDelete?: boolean;
+  canPrint?: boolean;
 };
 
 const emptyForm = (): FormState => ({
@@ -59,8 +72,12 @@ const emptyForm = (): FormState => ({
   assignedBranchIds: [],
   assignedZoneIds: [],
   assignedFarmIds: [],
+  mobileNumber: "",
   assignedShedId: "",
   active: true,
+  canUpdate: undefined,
+  canDelete: undefined,
+  canPrint: undefined,
 });
 
 function safeLoadData(
@@ -109,6 +126,10 @@ export default function MyTeam() {
   const [newPassword, setNewPassword] = useState("");
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [identityResult, setIdentityResult] = useState<{
+    serialNumber: string;
+    username: string;
+  } | null>(null);
 
   // myCompanyId: prefer companyId, fallback to user's own id (for CompanyAdmin who IS the company)
   const myCompanyId = currentUser?.companyId || currentUser?.id;
@@ -156,6 +177,7 @@ export default function MyTeam() {
       username: u.username,
       password: u.password,
       role: (u.role as SubUserRole) || "",
+      mobileNumber: u.mobileNumber || "",
       assignedBranchIds: u.assignedBranchIds || [],
       assignedZoneIds: u.assignedZoneIds || [],
       assignedFarmIds: u.assignedFarmIds || [],
@@ -167,22 +189,8 @@ export default function MyTeam() {
 
   function validateForm(): string | null {
     if (!form.name.trim()) return "Name is required";
-    if (!form.username.trim()) return "Username is required";
     if (!editUser && !form.password.trim()) return "Password is required";
     if (!form.role) return "Role is required";
-    // Check against ALL users to prevent duplicate usernames
-    try {
-      const allSystemUsers = storage.getUsers();
-      const existing = allSystemUsers.find(
-        (u) =>
-          u.username.toLowerCase() === form.username.trim().toLowerCase() &&
-          u.id !== editUser?.id,
-      );
-      if (existing)
-        return "Username already exists. Please choose a different username.";
-    } catch (err) {
-      console.error("[MyTeam] validateForm error:", err);
-    }
     return null;
   }
 
@@ -214,22 +222,32 @@ export default function MyTeam() {
           assignedFarmIds: form.assignedFarmIds,
           assignedShedId: form.assignedShedId || undefined,
           active: form.active,
+          permissions: {
+            canUpdate: form.canUpdate,
+            canDelete: form.canDelete,
+            canPrint: form.canPrint,
+          },
         });
         console.log("[MyTeam] User updated:", editUser.id);
         toast.success(`${form.name} updated successfully`);
       } else {
         const newUser = storage.addUser({
           name: form.name.trim(),
-          username: form.username.trim(),
+          username: "",
           password: form.password.trim(),
           role: form.role as SubUserRole,
           companyId: myCompanyId,
           createdBy: currentUser?.id,
+          mobileNumber: form.mobileNumber.trim() || undefined,
           assignedBranchIds: form.assignedBranchIds,
           assignedZoneIds: form.assignedZoneIds,
           assignedFarmIds: form.assignedFarmIds,
           assignedShedId: form.assignedShedId || undefined,
           active: form.active,
+        });
+        setIdentityResult({
+          serialNumber: newUser.serialNumber ?? "",
+          username: newUser.username,
         });
         console.log("[MyTeam] New user created:", newUser.id, newUser.username);
 
@@ -240,7 +258,7 @@ export default function MyTeam() {
             companyId: myCompanyId,
             type: "sub_user_assigned",
             title: "Welcome to the Team",
-            message: `You have been added to the team as a ${form.role}. Log in with username: ${form.username.trim()}`,
+            message: `You have been added to the team as a ${form.role}. Log in with username: ${newUser.username}`,
             read: false,
             createdAt: new Date().toISOString(),
           });
@@ -259,9 +277,7 @@ export default function MyTeam() {
           console.error("[MyTeam] Notification error (non-fatal):", notifErr);
         }
 
-        toast.success(
-          `${form.name} created! Login: ${form.username.trim()} / ${form.password.trim()}`,
-        );
+        toast.success(`${form.name} created! Username: ${newUser.username}`);
       }
 
       setSaving(false);
@@ -363,6 +379,7 @@ export default function MyTeam() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Serial No.</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Employee ID</TableHead>
                 <TableHead>Role</TableHead>
@@ -388,9 +405,14 @@ export default function MyTeam() {
                   : null;
                 return (
                   <TableRow key={u.id} data-ocid={`my_team.item.${idx + 1}`}>
+                    <TableCell>
+                      <code className="text-xs font-mono bg-muted px-1 rounded">
+                        {u.serialNumber || "—"}
+                      </code>
+                    </TableCell>
                     <TableCell className="font-medium">{u.name}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {u.employeeId || "\u2014"}
+                      {u.employeeId || "—"}
                     </TableCell>
                     <TableCell>
                       <span
@@ -491,6 +513,22 @@ export default function MyTeam() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {!editUser && (
+              <p className="text-xs text-muted-foreground bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                Username will be auto-generated from Name + Last 4 digits of
+                Mobile Number
+              </p>
+            )}
+            {editUser && (
+              <div className="space-y-1.5">
+                <Label>Username (read-only)</Label>
+                <Input
+                  value={editUser.username}
+                  readOnly
+                  className="bg-muted/50 font-mono text-sm"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="su-name">Full Name *</Label>
@@ -505,15 +543,15 @@ export default function MyTeam() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="su-username">Username / Login ID *</Label>
+                <Label htmlFor="su-mobile">Mobile Number</Label>
                 <Input
-                  id="su-username"
-                  value={form.username}
+                  id="su-mobile"
+                  value={form.mobileNumber}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, username: e.target.value }))
+                    setForm((f) => ({ ...f, mobileNumber: e.target.value }))
                   }
-                  placeholder="Unique login ID"
-                  data-ocid="my_team.search_input"
+                  placeholder="+91 XXXXX XXXXX"
+                  data-ocid="my_team.input"
                 />
               </div>
             </div>
@@ -534,8 +572,9 @@ export default function MyTeam() {
               </div>
               <div className="space-y-1.5">
                 <Label>Role *</Label>
+                {/* Bug 2 fix: pass undefined when role is empty so placeholder shows */}
                 <Select
-                  value={form.role}
+                  value={form.role || undefined}
                   onValueChange={(v) =>
                     setForm((f) => ({ ...f, role: v as SubUserRole }))
                   }
@@ -544,17 +583,100 @@ export default function MyTeam() {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(currentUser?.role === "Farmer"
-                      ? (["Staff"] as SubUserRole[])
-                      : (["Manager", "Supervisor", "Staff"] as SubUserRole[])
-                    ).map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {r}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="Manager">Manager</SelectItem>
+                    <SelectItem value="Supervisor">Supervisor</SelectItem>
+                    {currentUser?.role !== "Farmer" && (
+                      <SelectItem value="Staff">Staff</SelectItem>
+                    )}
+                    {currentUser?.role === "Farmer" && (
+                      <SelectItem value="Staff">Staff</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Permission Overrides */}
+              {form.role &&
+                ["Manager", "Supervisor", "Staff"].includes(form.role) &&
+                (() => {
+                  const defaults = getRoleDefaults(form.role);
+                  return (
+                    <div className="p-3 border rounded-lg bg-muted/30 space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Permission Overrides
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Leave unchecked to use role defaults.
+                      </p>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={
+                            form.canUpdate !== undefined
+                              ? form.canUpdate
+                              : defaults.canUpdate
+                          }
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              canUpdate: e.target.checked,
+                            }))
+                          }
+                          className="rounded"
+                          data-ocid="my_team.perm_update.checkbox"
+                        />
+                        Allow Update
+                        <span className="text-xs text-muted-foreground">
+                          (default: {defaults.canUpdate ? "Yes" : "No"})
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={
+                            form.canDelete !== undefined
+                              ? form.canDelete
+                              : defaults.canDelete
+                          }
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              canDelete: e.target.checked,
+                            }))
+                          }
+                          className="rounded"
+                          data-ocid="my_team.perm_delete.checkbox"
+                        />
+                        Allow Delete
+                        <span className="text-xs text-muted-foreground">
+                          (default: {defaults.canDelete ? "Yes" : "No"})
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={
+                            form.canPrint !== undefined
+                              ? form.canPrint
+                              : defaults.canPrint
+                          }
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              canPrint: e.target.checked,
+                            }))
+                          }
+                          className="rounded"
+                          data-ocid="my_team.perm_print.checkbox"
+                        />
+                        Allow Print
+                        <span className="text-xs text-muted-foreground">
+                          (default: {defaults.canPrint ? "Yes" : "No"})
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })()}
             </div>
 
             {/* Assigned Branch */}
@@ -611,6 +733,16 @@ export default function MyTeam() {
               </div>
             )}
 
+            {/* Bug 3 fix: show message when company has no farms at all */}
+            {farms.length === 0 && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-ocid="my_team.empty_state"
+              >
+                No farms available for your company.
+              </p>
+            )}
+
             {/* Assigned Farms */}
             {filteredFarms.length > 0 && (
               <div className="space-y-1.5">
@@ -634,21 +766,24 @@ export default function MyTeam() {
               </div>
             )}
 
-            {/* Assigned Line/Shed */}
+            {/* Assigned Line/Shed — Bug 1 fix: use "none" sentinel instead of empty string */}
             {filteredSheds.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Assigned Line / Area (Shed)</Label>
                 <Select
-                  value={form.assignedShedId}
+                  value={form.assignedShedId || "none"}
                   onValueChange={(v) =>
-                    setForm((f) => ({ ...f, assignedShedId: v }))
+                    setForm((f) => ({
+                      ...f,
+                      assignedShedId: v === "none" ? "" : v,
+                    }))
                   }
                 >
                   <SelectTrigger data-ocid="my_team.select">
                     <SelectValue placeholder="Select shed/line (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {filteredSheds.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}
@@ -726,6 +861,82 @@ export default function MyTeam() {
               data-ocid="my_team.confirm_button"
             >
               Reset Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Identity Result Modal */}
+      <Dialog
+        open={!!identityResult}
+        onOpenChange={() => setIdentityResult(null)}
+      >
+        <DialogContent className="max-w-md" data-ocid="my_team.identity.dialog">
+          <DialogHeader>
+            <DialogTitle className="text-green-700">
+              ✓ Sub-User Created Successfully
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Share these credentials with the new team member:
+            </p>
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Serial Number
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="flex-1 text-sm font-mono bg-background border rounded px-3 py-1.5">
+                    {identityResult?.serialNumber}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        identityResult?.serialNumber ?? "",
+                      );
+                      toast.success("Copied!");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Auto-Generated Username
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="flex-1 text-sm font-mono bg-background border rounded px-3 py-1.5">
+                    {identityResult?.username}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        identityResult?.username ?? "",
+                      );
+                      toast.success("Copied!");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Generated from: Name + Last 4 digits of mobile number
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setIdentityResult(null)}
+              data-ocid="my_team.identity.close_button"
+            >
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

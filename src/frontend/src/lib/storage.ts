@@ -1,3 +1,5 @@
+import { generateSerialNumber, generateUsername } from "./identityGenerator";
+
 export type Farm = {
   id: string;
   name: string;
@@ -136,6 +138,26 @@ export type User = {
   assignedBranchIds?: string[];
   assignedShedId?: string;
   active?: boolean;
+  serialNumber?: string;
+  autoUsername?: string;
+  permissions?: {
+    canUpdate?: boolean;
+    canDelete?: boolean;
+    canPrint?: boolean;
+  };
+};
+
+export type AuditLog = {
+  id: string;
+  module: string;
+  action: "delete";
+  recordId: string;
+  recordSummary: string;
+  deletedBy: string;
+  deletedByRole: string;
+  companyId?: string;
+  date: string;
+  time: string;
 };
 export type Company = {
   id: string;
@@ -146,6 +168,7 @@ export type Company = {
   email?: string;
   subscriptionPlan?: "Basic" | "Standard" | "Premium";
   farmCapacityLimit?: number;
+  codePrefix?: string;
 };
 export type Zone = {
   id: string;
@@ -468,6 +491,38 @@ function seedSupervisor01() {
   }
 }
 seedSupervisor01();
+// Seed sukhvinder9929 test user
+function seedSukhvinder() {
+  const users = get<User>("px_users");
+  const exists = users.find(
+    (u) => u.username.toLowerCase() === "sukhvinder9929",
+  );
+  if (!exists) {
+    set("px_users", [
+      ...users,
+      {
+        id: "sukhvinder-9929-id",
+        username: "sukhvinder9929",
+        password: "Sukh@123",
+        role: "CompanyAdmin" as const,
+        name: "Sukhvinder",
+        employeeId: "ADM-0002",
+        companyId: "demo-company-001",
+        active: true,
+      },
+    ]);
+  } else if (exists.password !== "Sukh@123") {
+    set(
+      "px_users",
+      users.map((u) =>
+        u.username.toLowerCase() === "sukhvinder9929"
+          ? { ...u, password: "Sukh@123", active: true }
+          : u,
+      ),
+    );
+  }
+}
+seedSukhvinder();
 
 export const storage = {
   // Users
@@ -476,7 +531,28 @@ export const storage = {
     const d = get<User>("px_users");
     const empNum = d.length + 1;
     const employeeId = u.employeeId || `EMP-${padNum(empNum)}`;
-    const n = { ...u, id: uid(), employeeId };
+    // Get company prefix if available
+    const companies = get<Company>("px_companies");
+    const company = companies.find((c: Company) => c.id === u.companyId);
+    const companyPrefix = company?.codePrefix;
+    // Generate serial number
+    const serialNumber =
+      u.serialNumber || generateSerialNumber(u.role, companyPrefix);
+    // Generate auto username from name + mobile (unique)
+    const existingUsernames = d.map((x) => x.username);
+    const autoUsername =
+      u.autoUsername ||
+      generateUsername(u.name, u.mobileNumber ?? "", existingUsernames);
+    // Use autoUsername as the actual username unless one was explicitly provided
+    const username = u.username?.trim() ? u.username : autoUsername;
+    const n = {
+      ...u,
+      id: uid(),
+      employeeId,
+      serialNumber,
+      autoUsername,
+      username,
+    };
     set("px_users", [...d, n]);
     return n;
   },
@@ -491,7 +567,7 @@ export const storage = {
     const lower = input.toLowerCase();
     return get<User>("px_users").find(
       (u) =>
-        u.username === input ||
+        u.username.toLowerCase() === lower ||
         (u.email != null && u.email.toLowerCase() === lower),
     );
   },
@@ -1019,6 +1095,73 @@ export const storage = {
       ? all.filter((s) => !s.companyId || s.companyId === companyId)
       : all;
   },
+  // Audit Logs
+  getAuditLogs: () => get<AuditLog>("px_audit_logs"),
+  addAuditLog: (log: Omit<AuditLog, "id">) => {
+    const d = get<AuditLog>("px_audit_logs");
+    const n = { ...log, id: uid() };
+    set("px_audit_logs", [...d, n]);
+    return n;
+  },
+
+  // Daily Entry CRUD
+  updateDailyEntry: (id: string, updates: Partial<DailyEntry>) => {
+    const d = get<DailyEntry>("px_daily").map((e) =>
+      e.id === id ? { ...e, ...updates } : e,
+    );
+    set("px_daily", d);
+  },
+  deleteDailyEntry: (id: string) =>
+    set(
+      "px_daily",
+      get<DailyEntry>("px_daily").filter((e) => e.id !== id),
+    ),
+
+  // Feed Issue CRUD
+  updateFeedIssue: (id: string, updates: Partial<FeedIssue>) => {
+    const d = get<FeedIssue>("px_feed_issues").map((e) =>
+      e.id === id ? { ...e, ...updates } : e,
+    );
+    set("px_feed_issues", d);
+  },
+  deleteFeedIssue: (id: string) =>
+    set(
+      "px_feed_issues",
+      get<FeedIssue>("px_feed_issues").filter((e) => e.id !== id),
+    ),
+
+  // Bird Sale CRUD
+  updateBirdSale: (id: string, updates: Partial<BirdSale>) => {
+    const d = get<BirdSale>("px_sales").map((e) =>
+      e.id === id ? { ...e, ...updates } : e,
+    );
+    set("px_sales", d);
+  },
+  deleteBirdSale: (id: string) =>
+    set(
+      "px_sales",
+      get<BirdSale>("px_sales").filter((e) => e.id !== id),
+    ),
+
+  // Feed Purchase CRUD
+  updateFeedPurchase: (id: string, updates: Partial<FeedPurchase>) => {
+    const d = get<FeedPurchase>("px_feed_purchases").map((e) =>
+      e.id === id ? { ...e, ...updates } : e,
+    );
+    set("px_feed_purchases", d);
+  },
+  deleteFeedPurchase: (id: string) =>
+    set(
+      "px_feed_purchases",
+      get<FeedPurchase>("px_feed_purchases").filter((e) => e.id !== id),
+    ),
+
+  // Batch delete
+  deleteBatch: (id: string) =>
+    set(
+      "px_batches",
+      get<Batch>("px_batches").filter((b) => b.id !== id),
+    ),
 };
 
 // ---- Finance Module Types ----

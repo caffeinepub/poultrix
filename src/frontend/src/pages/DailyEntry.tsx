@@ -1,11 +1,23 @@
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/context/AuthContext";
+import { logDelete } from "@/lib/auditHelper";
+import { usePermissions } from "@/lib/permissions";
+import { printRecord } from "@/lib/printRecord";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { type DailyEntry as DE, storage } from "@/lib/storage";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -20,6 +32,8 @@ function daysBetween(from: string, to: string) {
 }
 
 export default function DailyEntry() {
+  const { currentUser } = useAuth();
+  const { canUpdate, canDelete, canPrint } = usePermissions();
   const { farms } = useCompanyScope();
   const farmIds = new Set(farms.map((f) => f.id));
   const allBatches = storage.getBatches().filter((b) => b.status === "active");
@@ -31,11 +45,12 @@ export default function DailyEntry() {
   const [newVaccine, setNewVaccine] = useState("");
   const [showAddMedicine, setShowAddMedicine] = useState(false);
   const [showAddVaccine, setShowAddVaccine] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DE | null>(null);
+  const [editEntry, setEditEntry] = useState<DE | null>(null);
 
   const [form, setForm] = useState({
     batchId: "",
     entryDate: today(),
-    birdsAlive: "",
     mortalityCount: "",
     cullBirds: "",
     feedIntakeGrams: "",
@@ -72,28 +87,44 @@ export default function DailyEntry() {
         )
       : 0;
 
-  // Computed age and birds balance
   const batchAge = selBatch
     ? daysBetween(selBatch.placementDate, form.entryDate)
     : null;
 
+  // Auto-calculate birds alive from chicks qty minus all mortality and culls
   const cumulativeMortality = prevEntries.reduce(
     (s, e) => s + e.mortalityCount,
     0,
   );
-  const birdsBalance = selBatch
-    ? selBatch.chicksQty - cumulativeMortality
-    : null;
+  const cumulativeCull = prevEntries.reduce(
+    (s, e) => s + (e.cullBirds || 0),
+    0,
+  );
+  const todayMortality = Number.parseInt(form.mortalityCount) || 0;
+  const todayCull = Number.parseInt(form.cullBirds) || 0;
+  const calculatedBirdsAlive = selBatch
+    ? Math.max(
+        0,
+        selBatch.chicksQty -
+          cumulativeMortality -
+          todayMortality -
+          cumulativeCull -
+          todayCull,
+      )
+    : 0;
+
+  // Birds balance = calculated alive (same formula for batch info panel)
+  const birdsBalance = calculatedBirdsAlive;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.batchId || !form.birdsAlive) return;
+    if (!form.batchId) return;
     storage.addDailyEntry({
       batchId: form.batchId,
       entryDate: form.entryDate,
-      birdsAlive: Number.parseInt(form.birdsAlive) || 0,
-      mortalityCount: Number.parseInt(form.mortalityCount) || 0,
-      cullBirds: Number.parseInt(form.cullBirds) || 0,
+      birdsAlive: calculatedBirdsAlive,
+      mortalityCount: todayMortality,
+      cullBirds: todayCull,
       feedIntakeGrams: Number.parseInt(form.feedIntakeGrams) || 0,
       bodyWeightGrams: Number.parseInt(form.bodyWeightGrams) || 0,
       waterConsumptionLiters:
@@ -105,14 +136,14 @@ export default function DailyEntry() {
       vaccineUsed: form.vaccineUsed || undefined,
       remarks: form.remarks || undefined,
     });
+    // Update the batch's birdsAlive with the calculated value
     storage.updateBatch(form.batchId, {
-      birdsAlive: Number.parseInt(form.birdsAlive) || 0,
+      birdsAlive: calculatedBirdsAlive,
     });
     setEntries(storage.getDailyEntries());
     setForm({
       batchId: form.batchId,
       entryDate: today(),
-      birdsAlive: "",
       mortalityCount: "",
       cullBirds: "",
       feedIntakeGrams: "",
@@ -140,6 +171,19 @@ export default function DailyEntry() {
     setForm((f) => ({ ...f, vaccineUsed: newVaccine.trim() }));
     setNewVaccine("");
     setShowAddVaccine(false);
+  };
+
+  const confirmDeleteEntry = () => {
+    if (!deleteTarget) return;
+    logDelete({
+      module: "Daily Entry",
+      recordId: deleteTarget.id,
+      recordSummary: `Batch ${deleteTarget.batchId} | ${deleteTarget.entryDate}`,
+      user: currentUser,
+    });
+    storage.deleteDailyEntry(deleteTarget.id);
+    setEntries(storage.getDailyEntries());
+    setDeleteTarget(null);
   };
 
   const batchEntries = entries
@@ -183,10 +227,6 @@ export default function DailyEntry() {
                       Batch: <strong>{selBatch.batchNumber}</strong>
                     </span>
                     <span>
-                      Birds Alive:{" "}
-                      <strong>{selBatch.birdsAlive.toLocaleString()}</strong>
-                    </span>
-                    <span>
                       Chicks Placed:{" "}
                       <strong>{selBatch.chicksQty.toLocaleString()}</strong>
                     </span>
@@ -198,49 +238,48 @@ export default function DailyEntry() {
                         </strong>
                       </span>
                     )}
-                    {birdsBalance !== null && (
-                      <span>
-                        Birds Balance:{" "}
-                        <strong className="text-green-700">
-                          {birdsBalance.toLocaleString()}
-                        </strong>
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                    <span>Breed: {selBatch.breedType}</span>
-                    <span>Placement: {selBatch.placementDate}</span>
-                    {selBatch.hatcheryName && (
-                      <span>Hatchery: {selBatch.hatcheryName}</span>
-                    )}
+                    <span>
+                      Birds Balance:{" "}
+                      <strong className="text-green-700">
+                        {birdsBalance.toLocaleString()}
+                      </strong>
+                    </span>
                   </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Date *</Label>
-                  <Input
-                    data-ocid="daily_entry.date.input"
-                    type="date"
-                    value={form.entryDate}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, entryDate: e.target.value }))
-                    }
-                  />
+              {/* Auto-calculated Birds Alive display */}
+              {selBatch && (
+                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded">
+                  <div className="flex-1">
+                    <p className="text-xs text-green-700 font-medium mb-0.5">
+                      Birds Alive (Auto)
+                    </p>
+                    <p
+                      className="text-2xl font-bold text-green-700"
+                      data-ocid="daily_entry.birds_alive.success_state"
+                    >
+                      {calculatedBirdsAlive.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="text-xs text-green-600 text-right">
+                    <p>{selBatch.chicksQty.toLocaleString()} placed</p>
+                    <p>− {cumulativeMortality + todayMortality} mortality</p>
+                    <p>− {cumulativeCull + todayCull} culls</p>
+                  </div>
                 </div>
-                <div>
-                  <Label>Birds Alive *</Label>
-                  <Input
-                    data-ocid="daily_entry.birds_alive.input"
-                    type="number"
-                    value={form.birdsAlive}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, birdsAlive: e.target.value }))
-                    }
-                    placeholder="Current count"
-                  />
-                </div>
+              )}
+
+              <div>
+                <Label>Date *</Label>
+                <Input
+                  data-ocid="daily_entry.date.input"
+                  type="date"
+                  value={form.entryDate}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, entryDate: e.target.value }))
+                  }
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -251,10 +290,7 @@ export default function DailyEntry() {
                     type="number"
                     value={form.mortalityCount}
                     onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        mortalityCount: e.target.value,
-                      }))
+                      setForm((f) => ({ ...f, mortalityCount: e.target.value }))
                     }
                     placeholder="Dead birds today"
                   />
@@ -322,7 +358,6 @@ export default function DailyEntry() {
                 />
               </div>
 
-              {/* Medicine */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Label>Medicine Used</Label>
@@ -371,7 +406,6 @@ export default function DailyEntry() {
                 </select>
               </div>
 
-              {/* Vaccine */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Label>Vaccine Used</Label>
@@ -453,10 +487,10 @@ export default function DailyEntry() {
               <Button
                 type="submit"
                 className="w-full"
+                disabled={!form.batchId}
                 data-ocid="daily_entry.submit_button"
               >
-                <Plus size={16} className="mr-1" />
-                Save Daily Entry
+                <Plus size={16} className="mr-1" /> Save Daily Entry
               </Button>
             </form>
           </CardContent>
@@ -493,6 +527,7 @@ export default function DailyEntry() {
                       <th className="text-right p-1">Feed (g)</th>
                       <th className="text-right p-1">Wt (g)</th>
                       <th className="text-right p-1">FCR</th>
+                      <th className="p-1" />
                     </tr>
                   </thead>
                   <tbody>
@@ -503,13 +538,80 @@ export default function DailyEntry() {
                         data-ocid={`daily_entry.entry.row.${i + 1}`}
                       >
                         <td className="p-1">{e.entryDate}</td>
-                        <td className="p-1 text-right">{e.birdsAlive}</td>
+                        <td className="p-1 text-right text-green-700 font-medium">
+                          {e.birdsAlive}
+                        </td>
                         <td className="p-1 text-right">{e.mortalityCount}</td>
                         <td className="p-1 text-right">
                           {e.feedIntakeGrams.toLocaleString()}
                         </td>
                         <td className="p-1 text-right">{e.bodyWeightGrams}</td>
                         <td className="p-1 text-right">{e.fcr}</td>
+                        <td className="p-1">
+                          <div className="flex gap-0.5">
+                            {canUpdate && (
+                              <button
+                                type="button"
+                                onClick={() => setEditEntry({ ...e })}
+                                data-ocid={`daily_entry.edit_button.${i + 1}`}
+                                className="p-1 hover:bg-muted rounded"
+                                title="Edit"
+                              >
+                                <Pencil size={11} className="text-blue-600" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(e)}
+                                data-ocid={`daily_entry.delete_button.${i + 1}`}
+                                className="p-1 hover:bg-muted rounded"
+                                title="Delete"
+                              >
+                                <Trash2 size={11} className="text-red-600" />
+                              </button>
+                            )}
+                            {canPrint && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const batch = batches.find(
+                                    (b) => b.id === e.batchId,
+                                  );
+                                  const farm = farms.find(
+                                    (f) => f.id === batch?.farmId,
+                                  );
+                                  printRecord({
+                                    farmName: farm?.name,
+                                    batchNumber: batch?.batchNumber,
+                                    date: e.entryDate,
+                                    module: "Daily Farm Entry",
+                                    generatedBy: currentUser?.name,
+                                    entryDetails: {
+                                      Date: e.entryDate,
+                                      "Birds Alive": e.birdsAlive,
+                                      Mortality: e.mortalityCount,
+                                      "Cull Birds": e.cullBirds,
+                                      "Feed Intake (g)": e.feedIntakeGrams,
+                                      "Body Weight (g)": e.bodyWeightGrams,
+                                      "Water (L)": e.waterConsumptionLiters,
+                                      FCR: e.fcr,
+                                      "Mortality %": e.mortalityPct,
+                                      Medicine: e.medicineUsed,
+                                      Vaccine: e.vaccineUsed,
+                                      Remarks: e.remarks,
+                                    },
+                                  });
+                                }}
+                                data-ocid={`daily_entry.print_button.${i + 1}`}
+                                className="p-1 hover:bg-muted rounded"
+                                title="Print"
+                              >
+                                <Printer size={11} className="text-green-600" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -519,6 +621,137 @@ export default function DailyEntry() {
           </CardContent>
         </Card>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDeleteEntry}
+        recordSummary={deleteTarget ? `${deleteTarget.entryDate}` : undefined}
+      />
+
+      {editEntry && (
+        <Dialog
+          open={!!editEntry}
+          onOpenChange={(v) => {
+            if (!v) setEditEntry(null);
+          }}
+        >
+          <DialogContent data-ocid="daily_entry.edit.dialog">
+            <DialogHeader>
+              <DialogTitle>Edit Daily Entry</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Date</Label>
+                  <Input
+                    type="date"
+                    value={editEntry.entryDate}
+                    onChange={(e) =>
+                      setEditEntry((prev) =>
+                        prev ? { ...prev, entryDate: e.target.value } : prev,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Mortality</Label>
+                  <Input
+                    type="number"
+                    value={editEntry.mortalityCount}
+                    onChange={(e) =>
+                      setEditEntry((prev) =>
+                        prev
+                          ? { ...prev, mortalityCount: Number(e.target.value) }
+                          : prev,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Feed Intake (g)</Label>
+                  <Input
+                    type="number"
+                    value={editEntry.feedIntakeGrams}
+                    onChange={(e) =>
+                      setEditEntry((prev) =>
+                        prev
+                          ? { ...prev, feedIntakeGrams: Number(e.target.value) }
+                          : prev,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Body Weight (g)</Label>
+                  <Input
+                    type="number"
+                    value={editEntry.bodyWeightGrams}
+                    onChange={(e) =>
+                      setEditEntry((prev) =>
+                        prev
+                          ? { ...prev, bodyWeightGrams: Number(e.target.value) }
+                          : prev,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Water (L)</Label>
+                  <Input
+                    type="number"
+                    value={editEntry.waterConsumptionLiters}
+                    onChange={(e) =>
+                      setEditEntry((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              waterConsumptionLiters: Number(e.target.value),
+                            }
+                          : prev,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Remarks</Label>
+                <Textarea
+                  value={editEntry.remarks || ""}
+                  onChange={(e) =>
+                    setEditEntry((prev) =>
+                      prev ? { ...prev, remarks: e.target.value } : prev,
+                    )
+                  }
+                  rows={2}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditEntry(null)}
+                data-ocid="daily_entry.edit.cancel_button"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!editEntry) return;
+                  storage.updateDailyEntry(editEntry.id, editEntry);
+                  setEntries(storage.getDailyEntries());
+                  setEditEntry(null);
+                }}
+                data-ocid="daily_entry.edit.save_button"
+              >
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

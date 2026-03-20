@@ -1,3 +1,4 @@
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
+import { logDelete } from "@/lib/auditHelper";
+import { usePermissions } from "@/lib/permissions";
+import { printRecord } from "@/lib/printRecord";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { type Batch, type Farm, type Shed, storage } from "@/lib/storage";
 import {
@@ -19,7 +23,9 @@ import {
   Building2,
   ExternalLink,
   Home,
+  Pencil,
   Plus,
+  Printer,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -36,12 +42,34 @@ function daysBetween(from: string, to: string) {
   );
 }
 
+/** Abbreviates farm name: "Demo Poultry Farm" → "Demo P/F" */
+function abbreviateFarmName(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return words[0];
+  const first = words[0];
+  const rest = words
+    .slice(1)
+    .map((w) => w[0].toUpperCase())
+    .join("/");
+  return `${first} ${rest}`;
+}
+
+/** Returns next batch number for a farm: "Demo P/F-01", "Demo P/F-02", etc. */
+function getNextBatchNumber(farmId: string, abbrev: string): string {
+  const farmBatches = storage.getBatches().filter((b) => b.farmId === farmId);
+  const next = farmBatches.length + 1;
+  return `${abbrev}-${String(next).padStart(2, "0")}`;
+}
+
 export default function Farms() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
   const [, setRefresh] = useState(0);
   const refresh = () => setRefresh((n) => n + 1);
+  const { canUpdate, canDelete, canPrint } = usePermissions();
+  const [deleteTarget, setDeleteTarget] = useState<Farm | null>(null);
+  const [editFarm, setEditFarm] = useState<Farm | null>(null);
 
   const {
     farms: scopedFarms,
@@ -135,11 +163,14 @@ export default function Farms() {
     });
   }, [batchForm.farmId, sheds, allBatches]);
 
-  // Auto-generate batch number
+  // Auto-generate batch number scoped to the selected farm
   const autoNextBatchNumber = useMemo(() => {
-    const count = batches.length + 1;
-    return `BATCH-${String(count).padStart(3, "0")}`;
-  }, [batches.length]);
+    if (!batchForm.farmId) return "BATCH-01";
+    const selectedFarm = farms.find((f) => f.id === batchForm.farmId);
+    if (!selectedFarm) return "BATCH-01";
+    const abbrev = abbreviateFarmName(selectedFarm.name);
+    return getNextBatchNumber(batchForm.farmId, abbrev);
+  }, [batchForm.farmId, farms]);
 
   const saveFarm = () => {
     if (!farmForm.name) return;
@@ -147,7 +178,7 @@ export default function Farms() {
       currentUser?.role === "SuperAdmin"
         ? farmForm.companyId
         : myCompanyId || farmForm.companyId;
-    storage.addFarm({
+    const newFarm = storage.addFarm({
       name: farmForm.name,
       location: farmForm.location,
       totalCapacity: Number.parseInt(farmForm.totalCapacity) || 0,
@@ -160,6 +191,34 @@ export default function Farms() {
       supervisorId: farmForm.supervisorId || undefined,
       dealerId: farmForm.dealerId || undefined,
     });
+
+    // Auto-create default Shed and Batch for the new farm
+    if (newFarm) {
+      const abbrev = abbreviateFarmName(farmForm.name);
+      const newShed = storage.addShed({
+        farmId: newFarm.id,
+        name: abbrev,
+        capacity: Number.parseInt(farmForm.totalCapacity) || 0,
+        shedType: "Open",
+      });
+      if (newShed) {
+        storage.addBatch({
+          batchNumber: getNextBatchNumber(newFarm.id, abbrev),
+          farmId: newFarm.id,
+          shedId: newShed.id,
+          placementDate: new Date().toISOString().slice(0, 10),
+          chicksQty: 0,
+          chicksRate: 0,
+          transportCost: 0,
+          totalPlacementCost: 0,
+          birdsAlive: 0,
+          status: "active",
+          hatcheryName: "",
+          breedType: "Cobb",
+        });
+      }
+    }
+
     refresh();
     setFarmForm({
       name: "",
@@ -177,8 +236,16 @@ export default function Farms() {
     setFarmDialog(false);
   };
 
-  const deleteFarm = (id: string) => {
-    storage.deleteFarm(id);
+  const confirmDeleteFarm = () => {
+    if (!deleteTarget) return;
+    logDelete({
+      module: "Farms",
+      recordId: deleteTarget.id,
+      recordSummary: deleteTarget.name,
+      user: currentUser,
+    });
+    storage.deleteFarm(deleteTarget.id);
+    setDeleteTarget(null);
     refresh();
   };
 
@@ -198,6 +265,20 @@ export default function Farms() {
   const saveBatch = () => {
     if (!batchForm.farmId || !batchForm.shedId || !batchForm.chicksQty) return;
     const batchNumber = batchForm.batchNumber.trim() || autoNextBatchNumber;
+
+    // Duplicate batch number check scoped to this farm
+    const duplicate = storage
+      .getBatches()
+      .some(
+        (b) => b.farmId === batchForm.farmId && b.batchNumber === batchNumber,
+      );
+    if (duplicate) {
+      alert(
+        `Batch number "${batchNumber}" already exists for this farm. Please use a different number.`,
+      );
+      return;
+    }
+
     const qty = Number.parseInt(batchForm.chicksQty) || 0;
     const rate = Number.parseFloat(batchForm.chicksRate) || 0;
     storage.addBatch({
@@ -366,17 +447,73 @@ export default function Farms() {
                         {sheds.filter((s) => s.farmId === f.id).length}
                       </td>
                       <td className="p-2 text-right">
-                        {canManage && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => deleteFarm(f.id)}
-                            data-ocid={`farms.delete_button.${i + 1}`}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        )}
+                        <div className="flex gap-1 justify-end">
+                          {canUpdate && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setEditFarm(f)}
+                              data-ocid={`farms.edit_button.${i + 1}`}
+                              title="Edit farm"
+                            >
+                              <Pencil size={14} className="text-blue-600" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setDeleteTarget(f)}
+                              data-ocid={`farms.delete_button.${i + 1}`}
+                              title="Delete farm"
+                            >
+                              <Trash2 size={14} className="text-red-600" />
+                            </Button>
+                          )}
+                          {canPrint && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              data-ocid={`farms.print_button.${i + 1}`}
+                              title="Print farm"
+                              onClick={() => {
+                                const company = companies.find(
+                                  (c) => c.id === f.companyId,
+                                );
+                                printRecord({
+                                  companyName: company?.name,
+                                  farmName: f.name,
+                                  module: "Farm Management",
+                                  generatedBy: currentUser?.name,
+                                  entryDetails: {
+                                    "Farm Name": f.name,
+                                    Location: f.location,
+                                    "Total Capacity": f.totalCapacity,
+                                    "Farmer Name": f.farmerName,
+                                    "Farmer Contact": f.farmerContact,
+                                    Address: f.address,
+                                  },
+                                });
+                              }}
+                            >
+                              <Printer size={14} className="text-green-600" />
+                            </Button>
+                          )}
+                          {!canUpdate &&
+                            !canDelete &&
+                            !canPrint &&
+                            canManage && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDeleteTarget(f)}
+                                data-ocid={`farms.delete_button.${i + 1}`}
+                                title="Delete farm"
+                              >
+                                <Trash2 size={14} className="text-red-600" />
+                              </Button>
+                            )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -603,6 +740,9 @@ export default function Farms() {
           <DialogHeader>
             <DialogTitle>Add New Farm</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">
+            A default Shed and Batch will be auto-generated from the farm name.
+          </p>
           <div className="space-y-3">
             <div>
               <Label>Farm Name *</Label>
@@ -614,6 +754,12 @@ export default function Farms() {
                 }
                 placeholder="e.g. Green Valley Farm"
               />
+              {farmForm.name.trim() && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Shed: <strong>{abbreviateFarmName(farmForm.name)}</strong> ·
+                  Batch: <strong>{abbreviateFarmName(farmForm.name)}-01</strong>
+                </p>
+              )}
             </div>
             <div>
               <Label>Location</Label>
@@ -907,6 +1053,7 @@ export default function Farms() {
                     ...b,
                     farmId: e.target.value,
                     shedId: "",
+                    batchNumber: "",
                   }))
                 }
                 className="w-full border rounded px-2 py-1.5 text-sm bg-background"
@@ -1062,6 +1209,131 @@ export default function Farms() {
               data-ocid="farms.add_batch.submit_button"
             >
               Save Batch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDeleteFarm}
+        recordSummary={deleteTarget?.name}
+      />
+
+      {/* Edit Farm Dialog */}
+      <Dialog
+        open={!!editFarm}
+        onOpenChange={(v) => {
+          if (!v) setEditFarm(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          data-ocid="farms.edit_farm.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>Edit Farm</DialogTitle>
+          </DialogHeader>
+          {editFarm && (
+            <div className="space-y-3">
+              <div>
+                <Label>Farm Name</Label>
+                <Input
+                  data-ocid="farms.edit_farm_name.input"
+                  value={editFarm.name}
+                  onChange={(e) =>
+                    setEditFarm((f) => (f ? { ...f, name: e.target.value } : f))
+                  }
+                />
+              </div>
+              <div>
+                <Label>Location</Label>
+                <Input
+                  data-ocid="farms.edit_location.input"
+                  value={editFarm.location}
+                  onChange={(e) =>
+                    setEditFarm((f) =>
+                      f ? { ...f, location: e.target.value } : f,
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <Label>Full Address</Label>
+                <Input
+                  data-ocid="farms.edit_address.input"
+                  value={editFarm.address || ""}
+                  onChange={(e) =>
+                    setEditFarm((f) =>
+                      f ? { ...f, address: e.target.value } : f,
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <Label>Total Capacity (birds)</Label>
+                <Input
+                  data-ocid="farms.edit_capacity.input"
+                  type="number"
+                  value={editFarm.totalCapacity}
+                  onChange={(e) =>
+                    setEditFarm((f) =>
+                      f
+                        ? { ...f, totalCapacity: Number(e.target.value) || 0 }
+                        : f,
+                    )
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Farmer Name</Label>
+                  <Input
+                    data-ocid="farms.edit_farmer_name.input"
+                    value={editFarm.farmerName || ""}
+                    onChange={(e) =>
+                      setEditFarm((f) =>
+                        f ? { ...f, farmerName: e.target.value } : f,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Farmer Contact</Label>
+                  <Input
+                    data-ocid="farms.edit_farmer_contact.input"
+                    value={editFarm.farmerContact || ""}
+                    onChange={(e) =>
+                      setEditFarm((f) =>
+                        f ? { ...f, farmerContact: e.target.value } : f,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditFarm(null)}
+              data-ocid="farms.edit_farm.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!editFarm) return;
+                storage.updateFarm(editFarm.id, editFarm);
+                setEditFarm(null);
+                refresh();
+              }}
+              data-ocid="farms.edit_farm.save_button"
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

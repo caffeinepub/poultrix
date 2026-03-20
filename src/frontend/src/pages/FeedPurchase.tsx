@@ -1,3 +1,4 @@
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,9 +12,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { logDelete } from "@/lib/auditHelper";
+import { usePermissions } from "@/lib/permissions";
+import { printRecord } from "@/lib/printRecord";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { type FeedPurchase as FP, storage } from "@/lib/storage";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -34,7 +38,8 @@ const DEFAULT_FORM = {
 };
 
 export default function FeedPurchase() {
-  const { currentUser: _cu } = useAuth();
+  const { currentUser } = useAuth();
+  const { canUpdate, canDelete, canPrint } = usePermissions();
   const {
     farms: allFarms,
     branches,
@@ -45,6 +50,8 @@ export default function FeedPurchase() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [quickAddSupplier, setQuickAddSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<FP | null>(null);
+  const [editPurchase, setEditPurchase] = useState<FP | null>(null);
 
   const filteredFarms = useMemo(
     () =>
@@ -62,11 +69,12 @@ export default function FeedPurchase() {
     form.unit === "kg"
       ? Number(form.quantityKgInput) || 0
       : (Number(form.quantityBags) || 0) * 50;
-
   const totalAmount = Math.max(
     0,
     bags * (Number(form.ratePerBag) || 0) - (Number(form.discountAmount) || 0),
   );
+
+  const refreshPurchases = () => setPurchases(storage.getFeedPurchases());
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +94,7 @@ export default function FeedPurchase() {
       branchId: form.branchId || undefined,
       receivingFarmId: form.receivingFarmId || undefined,
     });
-    setPurchases(storage.getFeedPurchases());
+    refreshPurchases();
     setForm(DEFAULT_FORM);
   };
 
@@ -102,6 +110,19 @@ export default function FeedPurchase() {
     setQuickAddSupplier(false);
   };
 
+  const confirmDeletePurchase = () => {
+    if (!deleteTarget) return;
+    logDelete({
+      module: "Feed Purchase",
+      recordId: deleteTarget.id,
+      recordSummary: `${deleteTarget.feedType} | ${deleteTarget.purchaseDate}`,
+      user: currentUser,
+    });
+    storage.deleteFeedPurchase(deleteTarget.id);
+    refreshPurchases();
+    setDeleteTarget(null);
+  };
+
   return (
     <div className="space-y-6" data-ocid="feed_purchase.page">
       <h2 className="text-2xl font-bold">Feed Purchase</h2>
@@ -111,7 +132,6 @@ export default function FeedPurchase() {
             onSubmit={handleSubmit}
             className="grid grid-cols-1 sm:grid-cols-2 gap-4"
           >
-            {/* Supplier */}
             <div>
               <Label>Supplier / Feed Mill</Label>
               <div className="flex gap-2">
@@ -141,8 +161,6 @@ export default function FeedPurchase() {
                 </Button>
               </div>
             </div>
-
-            {/* Feed Type */}
             <div>
               <Label>Feed Type *</Label>
               <select
@@ -162,8 +180,6 @@ export default function FeedPurchase() {
                 ))}
               </select>
             </div>
-
-            {/* Branch */}
             <div>
               <Label>Branch (Receiving)</Label>
               <select
@@ -186,8 +202,6 @@ export default function FeedPurchase() {
                 ))}
               </select>
             </div>
-
-            {/* Receiving Farm */}
             <div>
               <Label>Receiving Farm</Label>
               <select
@@ -206,8 +220,6 @@ export default function FeedPurchase() {
                 ))}
               </select>
             </div>
-
-            {/* Unit toggle + Quantity */}
             <div className="sm:col-span-2">
               <Label>Quantity</Label>
               <div className="flex gap-3 items-start mt-1">
@@ -215,11 +227,7 @@ export default function FeedPurchase() {
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, unit: "bags" }))}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                      form.unit === "bags"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background text-foreground hover:bg-muted"
-                    }`}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${form.unit === "bags" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted"}`}
                     data-ocid="feed_purchase.unit_bags.toggle"
                   >
                     Bags
@@ -227,62 +235,42 @@ export default function FeedPurchase() {
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, unit: "kg" }))}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                      form.unit === "kg"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background text-foreground hover:bg-muted"
-                    }`}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${form.unit === "kg" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted"}`}
                     data-ocid="feed_purchase.unit_kg.toggle"
                   >
                     KG
                   </button>
                 </div>
                 {form.unit === "bags" ? (
-                  <div className="flex-1">
-                    <Input
-                      data-ocid="feed_purchase.qty_bags.input"
-                      type="number"
-                      min="0"
-                      value={form.quantityBags}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, quantityBags: e.target.value }))
-                      }
-                      placeholder="Number of bags"
-                    />
-                    {bags > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        = {bags * 50} kg
-                      </p>
-                    )}
-                  </div>
+                  <Input
+                    data-ocid="feed_purchase.qty_bags.input"
+                    type="number"
+                    min="0"
+                    value={form.quantityBags}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, quantityBags: e.target.value }))
+                    }
+                    placeholder="Number of bags"
+                  />
                 ) : (
-                  <div className="flex-1">
-                    <Input
-                      data-ocid="feed_purchase.qty_kg.input"
-                      type="number"
-                      min="0"
-                      value={form.quantityKgInput}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          quantityKgInput: e.target.value,
-                        }))
-                      }
-                      placeholder="Quantity in kg"
-                    />
-                    {kg > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        ≈ {Math.round(kg / 50)} bags
-                      </p>
-                    )}
-                  </div>
+                  <Input
+                    data-ocid="feed_purchase.qty_kg.input"
+                    type="number"
+                    min="0"
+                    value={form.quantityKgInput}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        quantityKgInput: e.target.value,
+                      }))
+                    }
+                    placeholder="Quantity in kg"
+                  />
                 )}
               </div>
             </div>
-
-            {/* Rate */}
             <div>
-              <Label>Rate per Bag (₹)</Label>
+              <Label>Rate per Bag (\u20B9)</Label>
               <Input
                 data-ocid="feed_purchase.rate.input"
                 type="number"
@@ -293,10 +281,8 @@ export default function FeedPurchase() {
                 placeholder="0"
               />
             </div>
-
-            {/* Discount */}
             <div>
-              <Label>Discount (₹)</Label>
+              <Label>Discount (\u20B9)</Label>
               <Input
                 data-ocid="feed_purchase.discount.input"
                 type="number"
@@ -307,8 +293,6 @@ export default function FeedPurchase() {
                 placeholder="0"
               />
             </div>
-
-            {/* Date */}
             <div>
               <Label>Purchase Date</Label>
               <Input
@@ -320,8 +304,6 @@ export default function FeedPurchase() {
                 }
               />
             </div>
-
-            {/* Challan */}
             <div>
               <Label>Delivery Challan No.</Label>
               <Input
@@ -333,14 +315,12 @@ export default function FeedPurchase() {
                 placeholder="Challan number"
               />
             </div>
-
-            {/* Total */}
             <div className="sm:col-span-2 flex items-center justify-between p-3 bg-muted rounded-lg">
               <span className="text-sm text-muted-foreground">
                 Total Amount:
               </span>
               <span className="font-bold text-xl">
-                ₹ {totalAmount.toLocaleString()}
+                \u20B9 {totalAmount.toLocaleString()}
               </span>
             </div>
             <div className="sm:col-span-2 flex justify-end">
@@ -353,7 +333,6 @@ export default function FeedPurchase() {
         </CardContent>
       </Card>
 
-      {/* Purchase History */}
       <div>
         <h3 className="font-semibold mb-3">Purchase History</h3>
         {purchases.length === 0 ? (
@@ -374,6 +353,7 @@ export default function FeedPurchase() {
                   <th className="text-right p-2">Bags</th>
                   <th className="text-right p-2">KG</th>
                   <th className="text-right p-2">Total</th>
+                  <th className="p-2" />
                 </tr>
               </thead>
               <tbody>
@@ -389,14 +369,72 @@ export default function FeedPurchase() {
                       <Badge variant="outline">{p.feedType}</Badge>
                     </td>
                     <td className="p-2 text-muted-foreground">
-                      {p.challanNumber || "—"}
+                      {p.challanNumber || "\u2014"}
                     </td>
                     <td className="p-2 text-right">{p.quantityBags}</td>
                     <td className="p-2 text-right text-muted-foreground">
                       {p.quantityKg ?? p.quantityBags * 50}
                     </td>
                     <td className="p-2 text-right font-medium">
-                      ₹ {p.totalAmount.toLocaleString()}
+                      \u20B9 {p.totalAmount.toLocaleString()}
+                    </td>
+                    <td className="p-2">
+                      <div className="flex gap-1 justify-end">
+                        {canUpdate && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setEditPurchase({ ...p })}
+                            data-ocid={`feed_purchase.edit_button.${i + 1}`}
+                            title="Edit"
+                          >
+                            <Pencil size={13} className="text-blue-600" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setDeleteTarget(p)}
+                            data-ocid={`feed_purchase.delete_button.${i + 1}`}
+                            title="Delete"
+                          >
+                            <Trash2 size={13} className="text-red-600" />
+                          </Button>
+                        )}
+                        {canPrint && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              const farm = allFarms.find(
+                                (f) => f.id === p.receivingFarmId,
+                              );
+                              printRecord({
+                                farmName: farm?.name,
+                                date: p.purchaseDate,
+                                module: "Feed Purchase",
+                                generatedBy: currentUser?.name,
+                                entryDetails: {
+                                  Supplier: p.supplierName,
+                                  "Feed Type": p.feedType,
+                                  "Qty (Bags)": p.quantityBags,
+                                  "Qty (KG)":
+                                    p.quantityKg ?? p.quantityBags * 50,
+                                  "Rate/Bag": `\u20B9${p.ratePerBag}`,
+                                  Total: `\u20B9${p.totalAmount}`,
+                                  Challan: p.challanNumber,
+                                  Date: p.purchaseDate,
+                                },
+                              });
+                            }}
+                            data-ocid={`feed_purchase.print_button.${i + 1}`}
+                            title="Print"
+                          >
+                            <Printer size={13} className="text-green-600" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -406,7 +444,127 @@ export default function FeedPurchase() {
         )}
       </div>
 
-      {/* Quick-add supplier dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDeletePurchase}
+        recordSummary={
+          deleteTarget
+            ? `${deleteTarget.feedType} | ${deleteTarget.purchaseDate}`
+            : undefined
+        }
+      />
+
+      {editPurchase && (
+        <Dialog
+          open={!!editPurchase}
+          onOpenChange={(v) => {
+            if (!v) setEditPurchase(null);
+          }}
+        >
+          <DialogContent data-ocid="feed_purchase.edit.dialog">
+            <DialogHeader>
+              <DialogTitle>Edit Feed Purchase</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Supplier Name</Label>
+                <Input
+                  value={editPurchase.supplierName}
+                  onChange={(e) =>
+                    setEditPurchase((p) =>
+                      p ? { ...p, supplierName: e.target.value } : p,
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <Label>Feed Type</Label>
+                <Input
+                  value={editPurchase.feedType}
+                  onChange={(e) =>
+                    setEditPurchase((p) =>
+                      p ? { ...p, feedType: e.target.value } : p,
+                    )
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Qty (Bags)</Label>
+                  <Input
+                    type="number"
+                    value={editPurchase.quantityBags}
+                    onChange={(e) =>
+                      setEditPurchase((p) =>
+                        p ? { ...p, quantityBags: Number(e.target.value) } : p,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Rate/Bag (\u20B9)</Label>
+                  <Input
+                    type="number"
+                    value={editPurchase.ratePerBag}
+                    onChange={(e) =>
+                      setEditPurchase((p) =>
+                        p ? { ...p, ratePerBag: Number(e.target.value) } : p,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Purchase Date</Label>
+                  <Input
+                    type="date"
+                    value={editPurchase.purchaseDate}
+                    onChange={(e) =>
+                      setEditPurchase((p) =>
+                        p ? { ...p, purchaseDate: e.target.value } : p,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Challan No.</Label>
+                  <Input
+                    value={editPurchase.challanNumber || ""}
+                    onChange={(e) =>
+                      setEditPurchase((p) =>
+                        p ? { ...p, challanNumber: e.target.value } : p,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditPurchase(null)}
+                data-ocid="feed_purchase.edit.cancel_button"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!editPurchase) return;
+                  storage.updateFeedPurchase(editPurchase.id, editPurchase);
+                  refreshPurchases();
+                  setEditPurchase(null);
+                }}
+                data-ocid="feed_purchase.edit.save_button"
+              >
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <Dialog open={quickAddSupplier} onOpenChange={setQuickAddSupplier}>
         <DialogContent data-ocid="feed_purchase.quick_supplier.dialog">
           <DialogHeader>

@@ -4,6 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import Layout from "./components/layout/Layout";
+import AuditLog from "./pages/AuditLog";
 import BirdSales from "./pages/BirdSales";
 import Branches from "./pages/Branches";
 import ChicksPlacement from "./pages/ChicksPlacement";
@@ -335,6 +336,14 @@ export default function App() {
                     roles={["SuperAdmin", "CompanyAdmin", "Farmer", "Dealer"]}
                   >
                     <SubscriptionPayments />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="audit-log"
+                element={
+                  <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
+                    <AuditLog />
                   </ProtectedRoute>
                 }
               />

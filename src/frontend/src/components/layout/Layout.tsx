@@ -31,6 +31,7 @@ import {
   Package,
   Receipt,
   Settings,
+  ShieldAlert,
   ShoppingCart,
   TrendingUp,
   Truck,
@@ -287,6 +288,12 @@ const navItems: NavItem[] = [
     to: "/users",
     icon: Users,
     roles: ["SuperAdmin"],
+  },
+  {
+    label: "Audit Log",
+    to: "/audit-log",
+    icon: ShieldAlert,
+    roles: ["SuperAdmin", "CompanyAdmin"],
   },
 ];
 
