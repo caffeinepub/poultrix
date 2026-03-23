@@ -1,4 +1,10 @@
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -25,6 +31,7 @@ import {
   GitBranch,
   Globe,
   IdCard,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -294,6 +301,12 @@ const navItems: NavItem[] = [
     to: "/audit-log",
     icon: ShieldAlert,
     roles: ["SuperAdmin", "CompanyAdmin"],
+  },
+  {
+    label: "Change Password",
+    to: "/change-password",
+    icon: KeyRound,
+    roles: ["SuperAdmin"],
   },
 ];
 
@@ -671,13 +684,40 @@ export default function Layout() {
                 companyId={currentUser.companyId}
               />
             )}
-            <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-              <UserIcon size={14} />
-              <span>{currentUser?.name}</span>
-              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                {currentUser?.role}
-              </span>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  data-ocid="nav.user.dropdown_menu"
+                >
+                  <UserIcon size={14} />
+                  <span>{currentUser?.name}</span>
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    {currentUser?.role}
+                  </span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {currentUser?.role === "SuperAdmin" && (
+                  <DropdownMenuItem
+                    onClick={() => navigate("/change-password")}
+                    data-ocid="nav.change_password.button"
+                  >
+                    <KeyRound size={14} className="mr-2" />
+                    Change Password
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="text-red-600 focus:text-red-600"
+                  data-ocid="nav.logout.button"
+                >
+                  <LogOut size={14} className="mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-6">

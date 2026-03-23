@@ -4,14 +4,21 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { storage } from "@/lib/storage";
 import {
+  Award,
   Bird,
+  Building2,
+  Calendar,
   ClipboardList,
   DollarSign,
   Droplets,
+  Eye,
+  EyeOff,
   Heart,
   LayoutDashboard,
+  Mail,
   Pill,
   Scale,
+  User,
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -39,6 +46,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -67,245 +75,271 @@ export default function Login() {
   };
 
   return (
-    <div
-      className="min-h-screen flex flex-col"
-      style={{
-        background:
-          "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 40%, #f0fdf4 100%)",
-      }}
-    >
-      <div className="flex-1 flex flex-col lg:flex-row">
-        {/* Left: Info Section */}
-        <div className="lg:w-1/2 flex flex-col justify-center px-8 py-12 lg:px-16 xl:px-20 relative overflow-hidden">
-          <div
-            className="absolute top-0 left-0 w-72 h-72 rounded-full opacity-20"
-            style={{
-              background: "radial-gradient(circle, #16a34a, transparent)",
-              transform: "translate(-40%, -40%)",
-            }}
-          />
-          <div
-            className="absolute bottom-0 right-0 w-64 h-64 rounded-full opacity-10"
-            style={{
-              background: "radial-gradient(circle, #15803d, transparent)",
-              transform: "translate(30%, 30%)",
-            }}
-          />
+    <div className="min-h-screen flex flex-col bg-green-50">
+      {/* Top Header Bar */}
+      <header className="bg-green-900 text-white py-3 px-6 flex items-center justify-center gap-3 shadow-md">
+        <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center flex-shrink-0">
+          <Bird size={18} className="text-white" />
+        </div>
+        <span className="text-lg font-bold tracking-wide">Poultrix</span>
+        <span className="text-green-400 hidden sm:inline">|</span>
+        <span className="text-green-200 text-sm hidden sm:inline">
+          Smart Poultry Farm Management System
+        </span>
+      </header>
 
-          <div className="flex items-center gap-3 mb-10">
+      {/* Main Content */}
+      <main className="flex-1">
+        <div className="max-w-7xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-10 items-start">
+          {/* Left: Info Section */}
+          <section className="space-y-8">
+            <div>
+              <h1 className="text-3xl xl:text-4xl font-bold text-green-900 leading-tight mb-4">
+                Poultrix – Smart Poultry Farm
+                <span className="block text-green-600">
+                  Management Platform
+                </span>
+              </h1>
+              <p className="text-gray-600 text-base leading-relaxed">
+                Poultrix is a comprehensive ERP solution designed specifically
+                for poultry businesses. Manage farms, flocks, feed, mortality,
+                medicines, and finances — all in one place. Built for Company
+                Admins, Supervisors, Dealers, and Farmers to work together
+                seamlessly with strict role-based access and real-time data.
+              </p>
+            </div>
+
+            {/* Feature Highlights */}
+            <div>
+              <h2 className="text-sm font-semibold text-green-700 uppercase tracking-wider mb-4">
+                Platform Features
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                {highlights.map(({ icon: Icon, label }) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-3 bg-white border border-green-100 rounded-xl p-3 shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md hover:border-green-300 cursor-default"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <Icon size={16} className="text-green-700" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-700 leading-tight">
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Stats bar */}
+            <div className="grid grid-cols-3 gap-4 bg-green-900 rounded-2xl p-5 text-white">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-300">500+</div>
+                <div className="text-xs text-green-200 mt-0.5">
+                  Farms Managed
+                </div>
+              </div>
+              <div className="text-center border-x border-green-700">
+                <div className="text-2xl font-bold text-green-300">10+</div>
+                <div className="text-xs text-green-200 mt-0.5">
+                  Years Experience
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-300">99%</div>
+                <div className="text-xs text-green-200 mt-0.5">Uptime SLA</div>
+              </div>
+            </div>
+          </section>
+
+          {/* Right: Hero Image */}
+          <section className="relative rounded-2xl overflow-hidden shadow-xl min-h-[400px] lg:min-h-[560px] hidden lg:block">
+            <img
+              src="/assets/generated/poultry-farm-hero.dim_900x700.jpg"
+              alt="Poultry Farm"
+              className="w-full h-full object-cover absolute inset-0"
+            />
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shadow-md"
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to bottom, rgba(20,83,45,0.3) 0%, rgba(20,83,45,0.7) 100%)",
+              }}
+            />
+            <div className="absolute bottom-8 left-8 right-8 text-white">
+              <p className="text-lg font-semibold leading-snug">
+                "Empowering every poultry farmer
+                <br />
+                with smart, data-driven tools."
+              </p>
+              <p className="text-sm text-green-200 mt-1">— Poultrix Platform</p>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-green-900 text-white">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-green-400 uppercase tracking-wider font-medium flex items-center gap-1.5">
+                <Building2 size={12} /> Company
+              </span>
+              <span className="text-sm font-semibold">
+                Poultrix India Pvt Ltd
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-green-400 uppercase tracking-wider font-medium flex items-center gap-1.5">
+                <Calendar size={12} /> Established
+              </span>
+              <span className="text-sm font-semibold">2026</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-green-400 uppercase tracking-wider font-medium flex items-center gap-1.5">
+                <User size={12} /> Founder
+              </span>
+              <span className="text-sm font-semibold">Sukhvinder Kaith</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-green-400 uppercase tracking-wider font-medium flex items-center gap-1.5">
+                <Award size={12} /> Experience
+              </span>
+              <span className="text-sm font-semibold">
+                10+ Years in Poultry Industry
+              </span>
+            </div>
+          </div>
+          <div className="border-t border-green-700 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
+            <span className="flex items-center gap-2 text-green-200">
+              <Mail size={14} />
+              sukhvinderprofess@gmail.com
+            </span>
+            <span className="text-green-400 text-xs">
+              © {new Date().getFullYear()} Poultrix India Pvt Ltd. All rights
+              reserved.
+            </span>
+          </div>
+        </div>
+      </footer>
+
+      {/* Fixed Login Modal Overlay */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+      >
+        <div
+          className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8"
+          style={{
+            animation: "loginModalIn 0.25s ease-out both",
+          }}
+        >
+          {/* Modal Header */}
+          <div className="flex flex-col items-center mb-6">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3 shadow-md"
               style={{
                 background: "linear-gradient(135deg, #16a34a, #15803d)",
               }}
             >
-              <Bird size={24} className="text-white" />
+              <Bird size={28} className="text-white" />
             </div>
-            <div>
-              <span className="text-2xl font-bold" style={{ color: "#15803d" }}>
-                Poultrix
-              </span>
-              <div className="text-xs font-medium" style={{ color: "#16a34a" }}>
-                Smart Poultry Farm Management
-              </div>
-            </div>
-          </div>
-
-          <h1
-            className="text-3xl xl:text-4xl font-bold leading-tight mb-4"
-            style={{ color: "#14532d" }}
-          >
-            Poultrix – Smart Poultry Farm
-            <br />
-            <span style={{ color: "#16a34a" }}>Management Platform</span>
-          </h1>
-
-          <p
-            className="text-sm leading-relaxed mb-8 max-w-lg"
-            style={{ color: "#166534" }}
-          >
-            Poultrix is an advanced digital platform designed for poultry
-            companies, dealers, and farmers to manage their farms efficiently.
-            The system helps track chick placement, daily farm data, feed
-            consumption, mortality, body weight, FCR performance, medicine
-            usage, and financial records in one place.
-          </p>
-
-          <div className="grid grid-cols-2 gap-3 max-w-lg">
-            {highlights.map(({ icon: Icon, label }) => (
-              <div
-                key={label}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl"
-                style={{
-                  background: "rgba(255,255,255,0.7)",
-                  border: "1px solid rgba(22,163,74,0.2)",
-                  backdropFilter: "blur(8px)",
-                }}
-              >
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{
-                    background: "linear-gradient(135deg, #dcfce7, #bbf7d0)",
-                  }}
-                >
-                  <Icon size={16} style={{ color: "#16a34a" }} />
-                </div>
-                <span
-                  className="text-xs font-medium"
-                  style={{ color: "#166534" }}
-                >
-                  {label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: Image + Login Card */}
-        <div className="lg:w-1/2 relative flex items-center justify-center py-12 px-6 lg:px-10">
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: `url('/assets/generated/poultry-farm-hero.dim_900x700.jpg')`,
-              opacity: 0.25,
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(160deg, rgba(240,253,244,0.6) 0%, rgba(187,247,208,0.4) 50%, rgba(21,128,61,0.3) 100%)",
-            }}
-          />
-
-          <div
-            className="relative w-full max-w-sm rounded-2xl p-8"
-            style={{
-              background: "rgba(255,255,255,0.92)",
-              backdropFilter: "blur(20px)",
-              boxShadow:
-                "0 20px 60px rgba(21,128,61,0.15), 0 4px 20px rgba(0,0,0,0.08)",
-              border: "1px solid rgba(22,163,74,0.15)",
-            }}
-          >
-            <div className="text-center mb-8">
-              <div
-                className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-md"
-                style={{
-                  background: "linear-gradient(135deg, #16a34a, #15803d)",
-                }}
-              >
-                <Bird size={26} className="text-white" />
-              </div>
-              <h2 className="text-2xl font-bold" style={{ color: "#14532d" }}>
-                Welcome Back
-              </h2>
-              <p className="text-sm mt-1" style={{ color: "#6b7280" }}>
-                Sign in to your Poultrix account
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <Label
-                  htmlFor="username"
-                  className="text-sm font-semibold"
-                  style={{ color: "#374151" }}
-                >
-                  Username
-                </Label>
-                <Input
-                  id="username"
-                  data-ocid="login.input"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  autoComplete="username"
-                  required
-                  className="mt-1.5 h-11 rounded-xl border-gray-200 focus:border-green-500 focus:ring-green-500"
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <Label
-                    htmlFor="password"
-                    className="text-sm font-semibold"
-                    style={{ color: "#374151" }}
-                  >
-                    Password
-                  </Label>
-                  <button
-                    type="button"
-                    className="text-xs font-medium hover:underline"
-                    style={{ color: "#16a34a" }}
-                    data-ocid="login.secondary_button"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-                <Input
-                  id="password"
-                  data-ocid="login.password.input"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  required
-                  className="h-11 rounded-xl border-gray-200 focus:border-green-500 focus:ring-green-500"
-                />
-              </div>
-
-              {error && (
-                <p
-                  className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5"
-                  data-ocid="login.error_state"
-                >
-                  {error}
-                </p>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full h-11 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all"
-                disabled={loading}
-                data-ocid="login.submit_button"
-                style={{
-                  background: "linear-gradient(135deg, #16a34a, #15803d)",
-                  border: "none",
-                }}
-              >
-                {loading ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-
-            <p
-              className="text-xs text-center mt-5"
-              style={{ color: "#9ca3af" }}
-            >
-              Default:{" "}
-              <span
-                className="font-mono font-medium"
-                style={{ color: "#6b7280" }}
-              >
-                superadmin / Admin@123
-              </span>
+            <h2 className="text-xl font-bold text-gray-900">Welcome Back</h2>
+            <p className="text-sm text-gray-500 mt-1 text-center">
+              Sign in to your Poultrix account
             </p>
           </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="username"
+                className="text-sm font-medium text-gray-700"
+              >
+                User
+              </Label>
+              <Input
+                id="username"
+                type="text"
+                autoComplete="username"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className="h-10 border-gray-200 focus:border-green-500 focus:ring-green-500"
+                data-ocid="login.input"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="password"
+                className="text-sm font-medium text-gray-700"
+              >
+                Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-10 pr-10 border-gray-200 focus:border-green-500 focus:ring-green-500"
+                  data-ocid="login.password.input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  data-ocid="login.secondary_button"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div
+                className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+                data-ocid="login.error_state"
+              >
+                {error}
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full h-10 font-semibold text-white transition-all duration-200 hover:shadow-lg hover:shadow-green-200"
+              style={{
+                background: loading
+                  ? "#86efac"
+                  : "linear-gradient(135deg, #16a34a, #15803d)",
+              }}
+              data-ocid="login.submit_button"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </Button>
+          </form>
+
+          <p className="text-center text-xs text-gray-400 mt-5">
+            Poultrix – Smart Automation for Poultry Business Management
+          </p>
         </div>
       </div>
 
-      <footer
-        className="py-4 text-center"
-        style={{
-          borderTop: "1px solid rgba(22,163,74,0.15)",
-          background: "rgba(255,255,255,0.6)",
-        }}
-      >
-        <p className="text-xs font-medium" style={{ color: "#6b7280" }}>
-          Poultrix – Smart Automation for Poultry Business Management.
-        </p>
-      </footer>
+      <style>{`
+        @keyframes loginModalIn {
+          from { opacity: 0; transform: scale(0.95) translateY(8px); }
+          to   { opacity: 1; transform: scale(1)   translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

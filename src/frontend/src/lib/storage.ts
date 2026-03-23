@@ -141,6 +141,8 @@ export type User = {
   assignedShedId?: string;
   active?: boolean;
   serialNumber?: string;
+  passwordHistory?: string[];
+  passwordLastChanged?: string;
   permissions?: {
     canUpdate?: boolean;
     canDelete?: boolean;

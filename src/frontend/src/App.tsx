@@ -7,6 +7,7 @@ import Layout from "./components/layout/Layout";
 import AuditLog from "./pages/AuditLog";
 import BirdSales from "./pages/BirdSales";
 import Branches from "./pages/Branches";
+import ChangePassword from "./pages/ChangePassword";
 import ChicksPlacement from "./pages/ChicksPlacement";
 import Companies from "./pages/Companies";
 import DailyEntry from "./pages/DailyEntry";
@@ -336,6 +337,14 @@ export default function App() {
                     roles={["SuperAdmin", "CompanyAdmin", "Farmer", "Dealer"]}
                   >
                     <SubscriptionPayments />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="change-password"
+                element={
+                  <ProtectedRoute roles={["SuperAdmin"]}>
+                    <ChangePassword />
                   </ProtectedRoute>
                 }
               />
