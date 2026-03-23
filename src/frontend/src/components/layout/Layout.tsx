@@ -539,9 +539,9 @@ export default function Layout() {
         .find((c) => c.id === currentUser.companyId);
       if (company) {
         if (currentUser.role === "CompanyAdmin")
-          return { label: "Company", name: company.name };
+          return { label: "Company", name: company.name, warning: false };
         if (currentUser.role === "Dealer")
-          return { label: "Dealer", name: company.name };
+          return { label: "Dealer", name: company.name, warning: false };
         if (currentUser.role === "Farmer") {
           const farm = storage
             .getFarms()
@@ -550,12 +550,17 @@ export default function Layout() {
                 f.companyId === currentUser.companyId &&
                 currentUser.assignedFarmIds?.[0] === f.id,
             );
-          return { label: "Farm", name: farm?.name ?? company.name };
+          return {
+            label: "Farm",
+            name: farm?.name ?? company.name,
+            warning: false,
+          };
         }
-        return { label: "Company", name: company.name };
+        return { label: "Company", name: company.name, warning: false };
       }
     }
-    return null;
+    // Non-SuperAdmin user without a valid company assignment
+    return { label: "", name: "", warning: true };
   }, [currentUser]);
 
   return (
@@ -644,14 +649,19 @@ export default function Layout() {
             <h1 className="font-semibold text-foreground leading-tight">
               Poultrix Dashboard
             </h1>
-            {firmLabel && (
+            {firmLabel && !firmLabel.warning && (
               <p className="text-xs text-muted-foreground leading-tight truncate">
                 {firmLabel.label}:{" "}
-                <span className="font-bold text-sm text-primary">
+                <span className="font-bold text-base text-primary">
                   {firmLabel.name}
                 </span>
                 &nbsp;|&nbsp;{currentUser?.name} ({currentUser?.role})
               </p>
+            )}
+            {firmLabel?.warning && (
+              <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                ⚠ No Company Assigned
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2">

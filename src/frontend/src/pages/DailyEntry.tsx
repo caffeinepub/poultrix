@@ -38,7 +38,10 @@ export default function DailyEntry() {
   const farmIds = new Set(farms.map((f) => f.id));
   const allBatches = storage.getBatches().filter((b) => b.status === "active");
   const batches = allBatches.filter((b) => farmIds.has(b.farmId));
-  const [entries, setEntries] = useState<DE[]>(storage.getDailyEntries());
+  const scopedBatchIds = new Set(batches.map((b) => b.id));
+  const [entries, setEntries] = useState<DE[]>(() =>
+    storage.getDailyEntries().filter((e) => scopedBatchIds.has(e.batchId)),
+  );
   const [medicines, setMedicines] = useState(storage.getMedicines());
   const [vaccines, setVaccines] = useState(storage.getVaccines());
   const [newMedicine, setNewMedicine] = useState("");

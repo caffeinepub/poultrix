@@ -1,4 +1,6 @@
-import { generateSerialNumber, generateUsername } from "./identityGenerator";
+import { generateSerialNumber } from "./identityGenerator";
+
+export const UNASSIGNED_SENTINEL = "__UNASSIGNED__";
 
 export type Farm = {
   id: string;
@@ -139,7 +141,6 @@ export type User = {
   assignedShedId?: string;
   active?: boolean;
   serialNumber?: string;
-  autoUsername?: string;
   permissions?: {
     canUpdate?: boolean;
     canDelete?: boolean;
@@ -524,6 +525,101 @@ function seedSukhvinder() {
 }
 seedSukhvinder();
 
+// Seed second test company for isolation testing
+function seedTestCompany2() {
+  const companies = get<Company>("px_companies");
+  const testCompanyId = "test-company-002";
+  if (!companies.find((c) => c.id === testCompanyId)) {
+    set("px_companies", [
+      ...companies,
+      {
+        id: testCompanyId,
+        name: "Test Agro Pvt Ltd",
+        address: "Test Address, City",
+        contactNumber: "8888888888",
+        email: "testadmin@poultrix.com",
+        subscriptionPlan: "Basic" as const,
+      },
+    ]);
+  }
+  const users = get<User>("px_users");
+  const exists = users.find((u) => u.username === "testadmin");
+  if (!exists) {
+    set("px_users", [
+      ...users,
+      {
+        id: "testadmin-002",
+        username: "testadmin",
+        password: "Test@123",
+        role: "CompanyAdmin" as const,
+        name: "Test Admin",
+        employeeId: "ADM-TC002",
+        companyId: testCompanyId,
+        active: true,
+      },
+    ]);
+  }
+}
+seedTestCompany2();
+
+// Seed admin123 test user
+function seedAdmin123() {
+  const users = get<User>("px_users");
+  const exists = users.find((u) => u.username === "admin123");
+  if (!exists) {
+    set("px_users", [
+      ...users,
+      {
+        id: "admin123-id",
+        username: "admin123",
+        password: "123456",
+        role: "CompanyAdmin" as const,
+        name: "Admin User 123",
+        employeeId: "ADM-0003",
+        companyId: "demo-company-001",
+        active: true,
+      },
+    ]);
+  } else {
+    // Ensure password and active status are correct
+    if (
+      exists.password !== "123456" ||
+      exists.active === false ||
+      !exists.companyId
+    ) {
+      set(
+        "px_users",
+        users.map((u) =>
+          u.username === "admin123"
+            ? {
+                ...u,
+                password: "123456",
+                active: true,
+                companyId: "demo-company-001",
+              }
+            : u,
+        ),
+      );
+    }
+  }
+  // Also ensure sukhvinder9929 has companyId
+  const allUsers = get<User>("px_users");
+  const sukh = allUsers.find(
+    (u) => u.username.toLowerCase() === "sukhvinder9929",
+  );
+  if (sukh && !sukh.companyId) {
+    set(
+      "px_users",
+      allUsers.map((u) =>
+        u.username.toLowerCase() === "sukhvinder9929"
+          ? { ...u, companyId: "demo-company-001" }
+          : u,
+      ),
+    );
+  }
+}
+seedAdmin123();
+
 export const storage = {
   // Users
   getUsers: () => get<User>("px_users"),
@@ -538,19 +634,12 @@ export const storage = {
     // Generate serial number
     const serialNumber =
       u.serialNumber || generateSerialNumber(u.role, companyPrefix);
-    // Generate auto username from name + mobile (unique)
-    const existingUsernames = d.map((x) => x.username);
-    const autoUsername =
-      u.autoUsername ||
-      generateUsername(u.name, u.mobileNumber ?? "", existingUsernames);
-    // Use autoUsername as the actual username unless one was explicitly provided
-    const username = u.username?.trim() ? u.username : autoUsername;
+    const username = u.username?.trim() || "";
     const n = {
       ...u,
       id: uid(),
       employeeId,
       serialNumber,
-      autoUsername,
       username,
     };
     set("px_users", [...d, n]);
@@ -1063,37 +1152,49 @@ export const storage = {
     return newN;
   },
   // Company-scoped helpers for data isolation
+  // SENTINEL: passing UNASSIGNED_SENTINEL means "user has no company → return empty"
+  // passing undefined means "SuperAdmin → return all"
   getFarmsByCompany: (companyId?: string) => {
+    if (companyId === UNASSIGNED_SENTINEL) return [];
     const all = get<Farm>("px_farms");
-    return companyId ? all.filter((f) => f.companyId === companyId) : all;
+    if (!companyId) return all; // SuperAdmin sees all
+    return all.filter((f) => f.companyId === companyId);
   },
   getZonesByCompany: (companyId?: string) => {
+    if (companyId === UNASSIGNED_SENTINEL) return [];
     const all = get<Zone>("px_zones");
-    return companyId ? all.filter((z) => z.companyId === companyId) : all;
+    if (!companyId) return all;
+    return all.filter((z) => z.companyId === companyId);
   },
   getBranchesByCompany: (companyId?: string) => {
+    if (companyId === UNASSIGNED_SENTINEL) return [];
     const all = get<Branch>("px_branches");
-    return companyId ? all.filter((b) => b.companyId === companyId) : all;
+    if (!companyId) return all;
+    return all.filter((b) => b.companyId === companyId);
   },
   getUsersByCompany: (companyId?: string) => {
+    if (companyId === UNASSIGNED_SENTINEL) return [];
     const all = get<User>("px_users");
-    return companyId ? all.filter((u) => u.companyId === companyId) : all;
+    if (!companyId) return all;
+    return all.filter((u) => u.companyId === companyId);
   },
   getGCSchemesByCompany: (companyId?: string) => {
+    if (companyId === UNASSIGNED_SENTINEL) return [];
     const all = get<GCScheme>("px_gc_schemes");
-    return companyId ? all.filter((s) => s.companyId === companyId) : all;
+    if (!companyId) return all;
+    return all.filter((s) => s.companyId === companyId);
   },
   getFeedTypesByCompany: (companyId?: string) => {
+    if (companyId === UNASSIGNED_SENTINEL) return [];
     const all = get<FeedType>("px_feed_types");
-    return companyId
-      ? all.filter((ft) => !ft.companyId || ft.companyId === companyId)
-      : all;
+    if (!companyId) return all;
+    return all.filter((ft) => !ft.companyId || ft.companyId === companyId);
   },
   getFeedSuppliersByCompany: (companyId?: string) => {
+    if (companyId === UNASSIGNED_SENTINEL) return [];
     const all = get<FeedSupplier>("px_feed_suppliers");
-    return companyId
-      ? all.filter((s) => !s.companyId || s.companyId === companyId)
-      : all;
+    if (!companyId) return all;
+    return all.filter((s) => !s.companyId || s.companyId === companyId);
   },
   // Audit Logs
   getAuditLogs: () => get<AuditLog>("px_audit_logs"),

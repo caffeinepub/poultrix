@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
-import { storage } from "@/lib/storage";
+import { UNASSIGNED_SENTINEL, storage } from "@/lib/storage";
 import { useMemo } from "react";
 
 // Returns null = access all farms (SuperAdmin), [] = no farms, [ids] = specific farms
@@ -11,10 +11,13 @@ export function useAccessibleFarmIds(): string[] | null {
     const allFarms = storage.getFarms();
     if (currentUser.role === "SuperAdmin") return null;
 
+    // Non-SuperAdmin without companyId → no access to any farm
+    if (!currentUser.companyId) return [];
+
     // For all non-SuperAdmin roles, first filter farms by companyId if present
-    const companyFarms = currentUser.companyId
-      ? allFarms.filter((f) => f.companyId === currentUser.companyId)
-      : allFarms;
+    const companyFarms = allFarms.filter(
+      (f) => f.companyId === currentUser.companyId,
+    );
 
     if (currentUser.role === "CompanyAdmin") {
       return companyFarms.map((f) => f.id);
@@ -82,7 +85,10 @@ export function useCompanyScope() {
 
   return useMemo(() => {
     const isSuperAdmin = currentUser?.role === "SuperAdmin";
-    const companyId = isSuperAdmin ? undefined : currentUser?.companyId;
+    // Use sentinel for non-SuperAdmin users without a company → they see zero data
+    const companyId = isSuperAdmin
+      ? undefined
+      : currentUser?.companyId || UNASSIGNED_SENTINEL;
 
     const farms = isSuperAdmin
       ? storage.getFarms()

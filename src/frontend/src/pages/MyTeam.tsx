@@ -189,8 +189,17 @@ export default function MyTeam() {
 
   function validateForm(): string | null {
     if (!form.name.trim()) return "Name is required";
+    if (!form.username.trim()) return "Username is required";
     if (!editUser && !form.password.trim()) return "Password is required";
     if (!form.role) return "Role is required";
+    // Duplicate username check
+    const allUsers = storage.getUsers();
+    const dup = allUsers.find(
+      (u) =>
+        u.username?.toLowerCase() === form.username.trim().toLowerCase() &&
+        u.id !== editUser?.id,
+    );
+    if (dup) return "Username already exists";
     return null;
   }
 
@@ -233,7 +242,7 @@ export default function MyTeam() {
       } else {
         const newUser = storage.addUser({
           name: form.name.trim(),
-          username: "",
+          username: form.username.trim(),
           password: form.password.trim(),
           role: form.role as SubUserRole,
           companyId: myCompanyId,
@@ -513,22 +522,17 @@ export default function MyTeam() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {!editUser && (
-              <p className="text-xs text-muted-foreground bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                Username will be auto-generated from Name + Last 4 digits of
-                Mobile Number
-              </p>
-            )}
-            {editUser && (
-              <div className="space-y-1.5">
-                <Label>Username (read-only)</Label>
-                <Input
-                  value={editUser.username}
-                  readOnly
-                  className="bg-muted/50 font-mono text-sm"
-                />
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="su-username">Username *</Label>
+              <Input
+                id="su-username"
+                value={form.username}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, username: e.target.value }))
+                }
+                placeholder="Enter username"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="su-name">Full Name *</Label>
@@ -904,32 +908,7 @@ export default function MyTeam() {
                   </Button>
                 </div>
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Auto-Generated Username
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="flex-1 text-sm font-mono bg-background border rounded px-3 py-1.5">
-                    {identityResult?.username}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        identityResult?.username ?? "",
-                      );
-                      toast.success("Copied!");
-                    }}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Generated from: Name + Last 4 digits of mobile number
-            </p>
           </div>
           <DialogFooter>
             <Button

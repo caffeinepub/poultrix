@@ -8,10 +8,15 @@ import {
   useState,
 } from "react";
 
+type LoginResult = {
+  success: boolean;
+  error?: "user_not_found" | "wrong_password" | "inactive";
+};
+
 type AuthContextType = {
   currentUser: User | null;
   companyId: string | undefined;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => LoginResult;
   logout: () => void;
   hasRole: (roles: User["role"][]) => boolean;
 };
@@ -33,27 +38,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser]);
 
-  const login = useCallback((username: string, password: string): boolean => {
-    const trimmedUsername = username.trim();
-    const trimmedPassword = password.trim();
+  const login = useCallback(
+    (username: string, password: string): LoginResult => {
+      const trimmedUsername = username.trim();
+      const trimmedPassword = password.trim();
 
-    console.log("[AUTH] Attempting login for:", trimmedUsername);
+      console.log("[AUTH] Login attempt:", { username: trimmedUsername });
 
-    const user = storage.getUserByUsername(trimmedUsername);
+      const user = storage.getUserByUsername(trimmedUsername);
 
-    console.log("[AUTH] Found user:", user ? user.username : "NOT FOUND");
-    console.log(
-      "[AUTH] Password match:",
-      user ? user.password === trimmedPassword : false,
-    );
-    console.log("[AUTH] User active:", user?.active);
+      console.log(
+        "[AUTH] User found in DB:",
+        user
+          ? {
+              username: user.username,
+              role: user.role,
+              companyId: user.companyId,
+              active: user.active,
+            }
+          : "NOT FOUND",
+      );
+      console.log(
+        "[AUTH] Password match:",
+        user ? user.password === trimmedPassword : false,
+      );
 
-    if (user && user.password === trimmedPassword && user.active !== false) {
+      if (!user) {
+        return { success: false, error: "user_not_found" };
+      }
+      if (user.active === false) {
+        return { success: false, error: "inactive" };
+      }
+      if (user.password !== trimmedPassword) {
+        return { success: false, error: "wrong_password" };
+      }
+
       setCurrentUser(user);
-      return true;
-    }
-    return false;
-  }, []);
+      return { success: true };
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     setCurrentUser(null);

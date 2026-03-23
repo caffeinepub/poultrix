@@ -15,7 +15,12 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
 import { useCompanyScope } from "@/lib/roleFilter";
-import { type Branch, type User, storage } from "@/lib/storage";
+import {
+  type Branch,
+  UNASSIGNED_SENTINEL,
+  type User,
+  storage,
+} from "@/lib/storage";
 import {
   Copy,
   GitBranch,
@@ -83,7 +88,7 @@ export default function UserManagement() {
   const {
     users: scopedUsers,
     branches: scopedBranches,
-    companyId: _myCompanyId,
+    companyId: myCompanyId,
   } = useCompanyScope();
   const [users, setUsers] = useState<User[]>(() => scopedUsers);
   const [branches, setBranches] = useState<Branch[]>(() => scopedBranches);
@@ -106,13 +111,21 @@ export default function UserManagement() {
   );
 
   const companies = storage.getCompanies();
-  const allZones = storage.getZones();
-  const allBranches = storage.getBranches();
-  const allFarms = storage.getFarms();
   const allSheds = storage.getSheds();
 
   const isSuperAdmin = currentUser?.role === "SuperAdmin";
   const isCompanyAdmin = currentUser?.role === "CompanyAdmin";
+
+  // Use sentinel-safe scoped helpers so SuperAdmin without company selection sees nothing
+  // For SuperAdmin: use form.companyId if selected, else UNASSIGNED_SENTINEL (no data until company picked)
+  // For CompanyAdmin: always use their own companyId
+  const formScopeId = isSuperAdmin
+    ? form.companyId || UNASSIGNED_SENTINEL
+    : currentUser?.companyId || UNASSIGNED_SENTINEL;
+
+  const allZones = storage.getZonesByCompany(formScopeId);
+  const allBranches = storage.getBranchesByCompany(formScopeId);
+  const allFarms = storage.getFarmsByCompany(formScopeId);
 
   const visibleUsers = users.filter((u) => {
     if (isSuperAdmin) return true;
@@ -120,18 +133,12 @@ export default function UserManagement() {
     return false;
   });
 
-  const formCompanyId = isSuperAdmin
+  const _formCompanyId = isSuperAdmin
     ? form.companyId
     : currentUser?.companyId || "";
-  const filteredZones = allZones.filter(
-    (z) => !formCompanyId || z.companyId === formCompanyId,
-  );
-  const filteredBranches = allBranches.filter(
-    (b) => !formCompanyId || b.companyId === formCompanyId,
-  );
-  const filteredFarms = allFarms.filter(
-    (f) => !formCompanyId || f.companyId === formCompanyId,
-  );
+  const filteredZones = allZones;
+  const filteredBranches = allBranches;
+  const filteredFarms = allFarms;
   const filteredSheds = allSheds.filter(
     (s) =>
       form.assignedFarmIds.includes(s.farmId) ||
@@ -183,9 +190,24 @@ export default function UserManagement() {
       ? form.companyId || undefined
       : currentUser?.companyId;
     if (editId) {
+      const trimmedUsernameEdit = form.username?.trim() || "";
+      if (!trimmedUsernameEdit) {
+        toast.error("Username is required");
+        return;
+      }
+      const allUsersEdit = storage.getUsers();
+      const dupEdit = allUsersEdit.find(
+        (u) =>
+          u.username?.toLowerCase() === trimmedUsernameEdit.toLowerCase() &&
+          u.id !== editId,
+      );
+      if (dupEdit) {
+        toast.error("Username already exists");
+        return;
+      }
       const updates: Partial<User> = {
         name: form.name,
-        username: form.username,
+        username: trimmedUsernameEdit,
         role: form.role,
         companyId,
         mobileNumber: form.mobileNumber || undefined,
@@ -201,9 +223,22 @@ export default function UserManagement() {
       storage.updateUser(editId, updates);
     } else {
       if (!form.password) return;
+      const trimmedUsername = form.username?.trim() || "";
+      if (!trimmedUsername) {
+        toast.error("Username is required");
+        return;
+      }
+      const allUsers = storage.getUsers();
+      const duplicate = allUsers.find(
+        (u) => u.username?.toLowerCase() === trimmedUsername.toLowerCase(),
+      );
+      if (duplicate) {
+        toast.error("Username already exists");
+        return;
+      }
       const newUser = storage.addUser({
         name: form.name,
-        username: form.username?.trim() || "",
+        username: trimmedUsername,
         password: form.password,
         role: form.role,
         companyId,
@@ -221,18 +256,18 @@ export default function UserManagement() {
         username: newUser.username,
       });
     }
-    setUsers(scopedUsers);
+    setUsers(storage.getUsersByCompany(myCompanyId));
     setDialog(false);
   };
 
   const toggleActive = (u: User) => {
     storage.updateUser(u.id, { active: !(u.active === false) });
-    setUsers(scopedUsers);
+    setUsers(storage.getUsersByCompany(myCompanyId));
   };
 
   const doDelete = (id: string) => {
     storage.deleteUser(id);
-    setUsers(scopedUsers);
+    setUsers(storage.getUsersByCompany(myCompanyId));
     setConfirmDelete(null);
   };
 
@@ -305,13 +340,13 @@ export default function UserManagement() {
         contactNumber: branchForm.contactNumber || undefined,
       });
     }
-    setBranches(scopedBranches);
+    setBranches(storage.getBranchesByCompany(myCompanyId));
     setBranchDialog(false);
   };
 
   const doDeleteBranch = (id: string) => {
     storage.deleteBranch(id);
-    setBranches(scopedBranches);
+    setBranches(storage.getBranchesByCompany(myCompanyId));
     setConfirmDeleteBranch(null);
   };
 
@@ -574,23 +609,17 @@ export default function UserManagement() {
                 placeholder="Full name"
               />
             </div>
-            {editId && (
-              <div>
-                <Label>Username (auto-generated, read-only)</Label>
-                <Input
-                  data-ocid="users.username.input"
-                  value={form.username}
-                  readOnly
-                  className="bg-muted/50 font-mono text-sm"
-                />
-              </div>
-            )}
-            {!editId && (
-              <p className="text-xs text-muted-foreground bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                Username will be auto-generated from Name + Last 4 digits of
-                Mobile Number
-              </p>
-            )}
+            <div>
+              <Label>Username *</Label>
+              <Input
+                data-ocid="users.username.input"
+                value={form.username}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, username: e.target.value }))
+                }
+                placeholder="Enter username"
+              />
+            </div>
             <div>
               <Label>
                 {editId ? "New Password (leave blank to keep)" : "Password *"}
@@ -1029,32 +1058,7 @@ export default function UserManagement() {
                   </Button>
                 </div>
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Auto-Generated Username
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="flex-1 text-sm font-mono bg-background border rounded px-3 py-1.5">
-                    {identityResult?.username}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        identityResult?.username ?? "",
-                      );
-                      toast.success("Copied!");
-                    }}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Generated from: Name + Last 4 digits of mobile number
-            </p>
           </div>
           <DialogFooter>
             <Button

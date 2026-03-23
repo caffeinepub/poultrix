@@ -27,6 +27,13 @@ const highlights = [
   { icon: Droplets, label: "Real-Time Analytics" },
 ];
 
+const ERROR_MESSAGES: Record<string, string> = {
+  user_not_found: "Invalid Username. No account found with this username.",
+  wrong_password:
+    "Incorrect Password. Please check your password and try again.",
+  inactive: "Account is inactive. Please contact your administrator.",
+};
+
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -39,9 +46,9 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const ok = login(username.trim(), password.trim());
+    const result = login(username.trim(), password.trim());
     setLoading(false);
-    if (ok) {
+    if (result.success) {
       const user = storage.getUserByUsername(username.trim());
       if (
         user?.role === "SuperAdmin" ||
@@ -53,7 +60,9 @@ export default function Login() {
         navigate("/employee-dashboard");
       }
     } else {
-      setError("Invalid credentials. Check your username/email and password.");
+      setError(
+        ERROR_MESSAGES[result.error ?? ""] || "Login failed. Please try again.",
+      );
     }
   };
 
@@ -203,14 +212,14 @@ export default function Login() {
                   className="text-sm font-semibold"
                   style={{ color: "#374151" }}
                 >
-                  Email / Username
+                  Username
                 </Label>
                 <Input
                   id="username"
                   data-ocid="login.input"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username or email"
+                  placeholder="Enter your username"
                   autoComplete="username"
                   required
                   className="mt-1.5 h-11 rounded-xl border-gray-200 focus:border-green-500 focus:ring-green-500"
