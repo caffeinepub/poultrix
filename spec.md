@@ -1,46 +1,41 @@
-# Poultrix
+# Poultrix – Signup & Admin Approval Workflow
 
 ## Current State
-- Farm Management has Farms (linked to Company/Zone/Branch) and Sheds tabs
-- Farm type: id, name, location, totalCapacity, companyId, zoneId, branchId
-- Shed type: id, name, farmId, capacity (no type or status fields)
-- Batch type exists with batchNumber, placementDate, chicksQty, hatcheryName, breedType, chicksRate, status (active/sold/closed)
-- Daily Entry is batch-linked with FCR auto-calc, medicine/vaccine dropdowns
-- GC Production Book closes batches and calculates GC settlement
-- Role-based access enforced via useAccessibleFarmIds()
-- No Farm Dashboard page; no per-farm drill-down view
-- No batch management UI in Farms page (batches managed via ChicksPlacement)
+- Login page has a single "Login" button in the header that opens a centered modal
+- Modal has Username + Password fields only
+- Footer shows `sukhvinderprofess@gmail.com`
+- User type includes `active?: boolean` for enabling/disabling accounts
+- No signup flow exists; users are only created by admins from User Management or My Team
+- No pending/rejected status on users
 
 ## Requested Changes (Diff)
 
 ### Add
-- Farm profile fields: farmerName, farmerContact, address, supervisorId, dealerId, numberOfSheds
-- Shed fields: shedType (Open/Environment Controlled), status (Active/Empty) with auto-update logic
-- Batch fields: chick breed (Cobb/Ross/Hubbard), hatchery name, initial body weight (already partially present)
-- Batch management tab in Farms page (list batches per shed, add new batch per shed, enforce one active batch per shed)
-- FarmDashboard page: clickable per-farm card → opens farm-specific dashboard with active batches, bird balance, current FCR, mortality %, feed consumption
-- Farm list clickable → navigate to /farms/:farmId/dashboard
-- Batch closing merged with GC settlement: Close Batch button auto-triggers GC settlement calculation
-- DailyEntry: show Age (days, auto-calculated from placement date), Birds Balance auto-calc, cumulative feed and FCR shown inline
-- Storage methods: updateFarm, updateShed, getFarmById, getShedsByFarm, getActiveBatchByShed
+- `SignupRequest` type in storage.ts with fields: id, fullName, mobileNumber, email, farmName, state, city, role (Farmer/Dealer/Company), birdCapacity (integer), password, status (pending/approved/rejected), createdAt, userId (set on approval)
+- `getSignupRequests()`, `addSignupRequest()`, `updateSignupRequest()` storage methods
+- `SignupRequests.tsx` admin page listing all pending signup requests with Approve/Reject actions
+- On approval: auto-generate userId (FARM001, DEALER001, ADM001 format with incrementing counter), set status=approved, create User record with active=true, status='active'
+- On rejection: set status=rejected
+- `Signup.tsx` — dedicated signup modal triggered by "Sign Up" button (NOT the login modal)
+- Sign Up button in the header next to Login button (separate, not merged)
+- Support email updated to `poultrixindia@gmail.com` with clickable mailto link in footer
+- Route `/signup-requests` for SignupRequests page
+- Sidebar entry "Signup Requests" visible to SuperAdmin only
 
 ### Modify
-- Farms.tsx: add Batches tab, enhanced Add Farm dialog (farmerName, farmerContact, supervisorId, dealerId), enhanced Add Shed dialog (shedType, status), farm rows are clickable links to farm dashboard
-- Sheds: status auto-derives from active batches (computed, not stored separately)
-- storage.ts: extend Farm, Shed types; add updateFarm, getShedsByFarm, getActiveBatchByShed methods
-- GCProduction.tsx: rename "Close Production Book" to "Close Batch & Settle" to reflect unified flow
-- Layout.tsx / App.tsx: add /farm-dashboard/:farmId route for FarmDashboard
+- `Login.tsx` — Add separate "Sign Up" button in header (next to Login), update footer email to `poultrixindia@gmail.com` with mailto link
+- `AuthContext.tsx` — login() checks for signup status: if user has `signupStatus='pending'` → error `account_pending`; if `signupStatus='rejected'` → error `account_rejected`. Only `active=true` users can login.
+- `storage.ts` — Add SignupRequest type/storage, add `signupStatus` field to User type
+- `App.tsx` — Add `/signup-requests` route (SuperAdmin protected)
+- Sidebar — Add "Signup Requests" link under Users section for SuperAdmin
 
 ### Remove
-- Nothing removed; all existing data and routes preserved
+- Old contact email `sukhvinderprofess@gmail.com` from footer (replace with new one)
 
 ## Implementation Plan
-1. Extend Farm type with farmerName, farmerContact, address, supervisorId, dealerId
-2. Extend Shed type with shedType field
-3. Add storage helper methods: updateFarm, getShedsByFarm, getActiveBatchByShed
-4. Upgrade Farms.tsx: enhanced farm/shed dialogs, Batches tab (list + add per shed), farm rows clickable to farm dashboard, shed status computed from active batches
-5. Create FarmDashboard.tsx page: KPI cards (active batches, bird count, FCR, mortality, feed consumption), batch detail table, role-based access guard
-6. Update DailyEntry.tsx: show age in days, birds balance auto-calc display
-7. Update App.tsx: add /farm-dashboard/:farmId route
-8. Update Layout.tsx: navigation entry for Farm Dashboard (or rely on Farms page links)
-9. Validate build and deploy
+1. Add `SignupRequest` type + storage methods to `storage.ts`; add `signupStatus` to User type
+2. Update `AuthContext.tsx` login to return pending/rejected errors and check signupStatus
+3. Create `Signup.tsx` with all required fields and pending confirmation screen
+4. Update `Login.tsx` — add Sign Up button, update email in footer, update error messages
+5. Create `SignupRequests.tsx` admin page with approval/rejection and auto userId generation
+6. Update `App.tsx` with new route and sidebar with new nav link

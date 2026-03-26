@@ -10,7 +10,12 @@ import {
 
 type LoginResult = {
   success: boolean;
-  error?: "user_not_found" | "wrong_password" | "inactive";
+  error?:
+    | "user_not_found"
+    | "wrong_password"
+    | "inactive"
+    | "account_pending"
+    | "account_rejected";
 };
 
 type AuthContextType = {
@@ -65,6 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!user) {
         return { success: false, error: "user_not_found" };
+      }
+      if (user.signupStatus === "pending") {
+        return { success: false, error: "account_pending" };
+      }
+      if (user.signupStatus === "rejected") {
+        return { success: false, error: "account_rejected" };
       }
       if (user.active === false) {
         return { success: false, error: "inactive" };

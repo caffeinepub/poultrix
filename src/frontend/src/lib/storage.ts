@@ -155,6 +155,7 @@ export type User = {
   assignedBranchIds?: string[];
   assignedShedId?: string;
   active?: boolean;
+  signupStatus?: "pending" | "approved" | "rejected";
   serialNumber?: string;
   passwordHistory?: string[];
   passwordLastChanged?: string;
@@ -165,6 +166,22 @@ export type User = {
   };
 };
 
+export type SignupRequest = {
+  id: string;
+  fullName: string;
+  mobileNumber: string;
+  email: string;
+  farmName: string;
+  state: string;
+  city: string;
+  role: "Farmer" | "Dealer" | "Company";
+  birdCapacity: number;
+  password: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  userId?: string;
+  rejectionReason?: string;
+};
 export type AuditLog = {
   id: string;
   module: string;
@@ -683,6 +700,30 @@ export const storage = {
       "px_users",
       get<User>("px_users").filter((u) => u.id !== id),
     ),
+
+  // Signup Requests
+  getSignupRequests: () => get<SignupRequest>("px_signup_requests"),
+  addSignupRequest: (req: Omit<SignupRequest, "id">) => {
+    const d = get<SignupRequest>("px_signup_requests");
+    const n = { ...req, id: uid() };
+    set("px_signup_requests", [...d, n]);
+    return n;
+  },
+  updateSignupRequest: (id: string, updates: Partial<SignupRequest>) => {
+    const d = get<SignupRequest>("px_signup_requests").map((r) =>
+      r.id === id ? { ...r, ...updates } : r,
+    );
+    set("px_signup_requests", d);
+  },
+  generateUserId: (role: "Farmer" | "Dealer" | "Company"): string => {
+    const requests = get<SignupRequest>("px_signup_requests").filter(
+      (r) => r.role === role && r.status === "approved",
+    );
+    const num = String(requests.length + 1).padStart(3, "0");
+    const prefix =
+      role === "Farmer" ? "FARM" : role === "Dealer" ? "DEALER" : "ADM";
+    return `${prefix}${num}`;
+  },
   getUsersByCompanyId: (companyId: string): User[] =>
     get<User>("px_users").filter((u) => u.companyId === companyId),
 

@@ -41,6 +41,7 @@ import PerformanceReport from "./pages/PerformanceReport";
 import ProductionSettlements from "./pages/ProductionSettlements";
 import Receipts from "./pages/Receipts";
 import Reports from "./pages/Reports";
+import SignupRequests from "./pages/SignupRequests";
 import SubscriptionDashboard from "./pages/SubscriptionDashboard";
 import SubscriptionInvoices from "./pages/SubscriptionInvoices";
 import SubscriptionManagement from "./pages/SubscriptionManagement";
@@ -359,6 +360,14 @@ export default function App() {
                 element={
                   <ProtectedRoute roles={["SuperAdmin", "CompanyAdmin"]}>
                     <AuditLog />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="signup-requests"
+                element={
+                  <ProtectedRoute roles={["SuperAdmin"]}>
+                    <SignupRequests />
                   </ProtectedRoute>
                 }
               />

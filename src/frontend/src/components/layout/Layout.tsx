@@ -49,6 +49,7 @@ import {
   TrendingUp,
   Truck,
   User as UserIcon,
+  UserPlus,
   Users,
   Wheat,
   X,
@@ -299,6 +300,12 @@ const navItems: NavItem[] = [
     label: "User Management",
     to: "/users",
     icon: Users,
+    roles: ["SuperAdmin"],
+  },
+  {
+    label: "Signup Requests",
+    to: "/signup-requests",
+    icon: UserPlus,
     roles: ["SuperAdmin"],
   },
   {

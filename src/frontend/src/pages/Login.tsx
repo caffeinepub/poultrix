@@ -20,9 +20,11 @@ import {
   Pill,
   Scale,
   User,
+  UserPlus,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import Signup from "./Signup";
 
 const highlights = [
   { icon: Bird, label: "Chick Batch Management" },
@@ -39,6 +41,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   user_not_found: "User not found",
   wrong_password: "Incorrect password",
   inactive: "Account is inactive. Please contact your administrator.",
+  account_pending:
+    "Your account is under approval. Please wait for admin confirmation.",
+  account_rejected:
+    "Your request was rejected. Please contact support at poultrixindia@gmail.com",
 };
 
 export default function Login() {
@@ -50,6 +56,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,14 +121,26 @@ export default function Login() {
             Smart Poultry Farm Management System
           </span>
         </div>
-        <button
-          type="button"
-          onClick={openModal}
-          className="flex items-center gap-2 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-200 shadow hover:shadow-md"
-        >
-          <User size={15} />
-          Login
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSignup(true)}
+            className="flex items-center gap-2 bg-white hover:bg-green-50 text-green-800 text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-200 shadow border border-green-200 hover:border-green-400"
+            data-ocid="login.open_modal_button"
+          >
+            <UserPlus size={15} />
+            Sign Up
+          </button>
+          <button
+            type="button"
+            onClick={openModal}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-200 shadow hover:shadow-md"
+            data-ocid="login.primary_button"
+          >
+            <User size={15} />
+            Login
+          </button>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -184,7 +203,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="flex justify-center lg:justify-start">
+            <div className="flex gap-3 flex-wrap justify-center lg:justify-start">
               <button
                 type="button"
                 onClick={openModal}
@@ -192,6 +211,14 @@ export default function Login() {
               >
                 <User size={16} />
                 Login to Poultrix
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSignup(true)}
+                className="inline-flex items-center gap-2 bg-white hover:bg-green-50 text-green-800 font-semibold px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 text-sm border border-green-300 hover:border-green-500"
+              >
+                <UserPlus size={16} />
+                Sign Up
               </button>
             </div>
           </section>
@@ -255,10 +282,13 @@ export default function Login() {
             </div>
           </div>
           <div className="border-t border-green-700 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
-            <span className="flex items-center gap-2 text-green-200">
+            <a
+              href="mailto:poultrixindia@gmail.com"
+              className="flex items-center gap-2 text-green-200 hover:text-white transition-colors"
+            >
               <Mail size={14} />
-              sukhvinderprofess@gmail.com
-            </span>
+              For support: poultrixindia@gmail.com
+            </a>
             <span className="text-green-400 text-xs">
               © {new Date().getFullYear()} Poultrix India Pvt Ltd. All rights
               reserved.
@@ -401,6 +431,8 @@ export default function Login() {
           </div>
         </>
       )}
+
+      <Signup open={showSignup} onClose={() => setShowSignup(false)} />
 
       <style>{`
         @keyframes loginModalIn {
