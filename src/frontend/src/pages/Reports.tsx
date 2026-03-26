@@ -4,6 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
+import {
+  downloadCSV as nativeCSV,
+  downloadExcel as nativeExcel,
+  printAsPDF,
+} from "@/lib/exportUtils";
 import { useAccessibleFarmIds, useCompanyScope } from "@/lib/roleFilter";
 import { type Branch, type Company, type Zone, storage } from "@/lib/storage";
 import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
@@ -32,30 +37,12 @@ function downloadCSV(rows: Row[], filename: string) {
   a.click();
 }
 
-async function downloadExcel(rows: Row[], filename: string) {
-  const XLSX = await import("xlsx");
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Report");
-  XLSX.writeFile(wb, filename);
+function downloadExcel(rows: Row[], filename: string) {
+  nativeExcel(rows, filename);
 }
 
-async function downloadPDF(rows: Row[], title: string, filename: string) {
-  const { default: jsPDF } = await import("jspdf");
-  const { default: autoTable } = await import("jspdf-autotable");
-  const doc = new jsPDF();
-  doc.setFontSize(14);
-  doc.text(title, 14, 16);
-  doc.setFontSize(10);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 24);
-  if (rows.length) {
-    autoTable(doc, {
-      startY: 30,
-      head: [Object.keys(rows[0])],
-      body: rows.map((r) => Object.values(r).map(String)),
-    });
-  }
-  doc.save(filename);
+function downloadPDF(rows: Row[], title: string, filename: string) {
+  printAsPDF(rows, title, filename);
 }
 
 function ReportTable({

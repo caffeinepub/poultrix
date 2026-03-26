@@ -190,7 +190,7 @@ export default function UserManagement() {
       ? form.companyId || undefined
       : currentUser?.companyId;
     if (editId) {
-      const trimmedUsernameEdit = form.username?.trim() || "";
+      const trimmedUsernameEdit = (form.username?.trim() || "").toLowerCase();
       if (!trimmedUsernameEdit) {
         toast.error("Username is required");
         return;
@@ -223,7 +223,7 @@ export default function UserManagement() {
       storage.updateUser(editId, updates);
     } else {
       if (!form.password) return;
-      const trimmedUsername = form.username?.trim() || "";
+      const trimmedUsername = (form.username?.trim() || "").toLowerCase();
       if (!trimmedUsername) {
         toast.error("Username is required");
         return;

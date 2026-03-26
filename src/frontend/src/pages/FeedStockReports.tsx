@@ -157,78 +157,26 @@ export default function FeedStockReports() {
 
   const exportExcel = () => {
     if (!reportData) return;
-    import("xlsx").then(({ utils, writeFile }) => {
-      const rows = reportData.map((r) => ({
-        "Feed Type": r.feedType,
-        "Opening Stock (kg)": r.openingKg,
-        "Total Received (kg)": r.receivedKg,
-        "Total Issued (kg)": r.issuedKg,
-        "Current Balance (kg)": r.balanceKg,
-        "Balance (bags)": Math.round(r.balanceKg / 50),
-      }));
-      if (totals) {
-        rows.push({
-          "Feed Type": "TOTAL",
-          "Opening Stock (kg)": totals.openingKg,
-          "Total Received (kg)": totals.receivedKg,
-          "Total Issued (kg)": totals.issuedKg,
-          "Current Balance (kg)": totals.balanceKg,
-          "Balance (bags)": Math.round(totals.balanceKg / 50),
-        });
-      }
-      const ws = utils.json_to_sheet(rows);
-      const wb = utils.book_new();
-      utils.book_append_sheet(wb, ws, "Feed Stock Report");
-      writeFile(wb, "feed_stock_report.xlsx");
+    import("@/lib/exportUtils").then(({ downloadExcel: nativeXLSX }) => {
+      nativeXLSX(
+        reportData as unknown as Record<string, unknown>[],
+        "feed_stock_report.csv",
+      );
     });
   };
 
   const exportPDF = () => {
     if (!reportData) return;
-    import("jspdf").then(({ default: jsPDF }) => {
-      import("jspdf-autotable").then(({ default: autoTable }) => {
-        const doc = new jsPDF();
-        doc.setFontSize(16);
-        doc.text("Feed Stock Report", 14, 18);
-        doc.setFontSize(10);
-        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 26);
-        autoTable(doc, {
-          startY: 32,
-          head: [
-            [
-              "Feed Type",
-              "Opening (kg)",
-              "Received (kg)",
-              "Issued (kg)",
-              "Balance (kg)",
-              "Balance (bags)",
-            ],
-          ],
-          body: [
-            ...reportData.map((r) => [
-              r.feedType,
-              r.openingKg.toLocaleString(),
-              r.receivedKg.toLocaleString(),
-              r.issuedKg.toLocaleString(),
-              r.balanceKg.toLocaleString(),
-              Math.round(r.balanceKg / 50),
-            ]),
-            totals
-              ? [
-                  "TOTAL",
-                  totals.openingKg.toLocaleString(),
-                  totals.receivedKg.toLocaleString(),
-                  totals.issuedKg.toLocaleString(),
-                  totals.balanceKg.toLocaleString(),
-                  Math.round(totals.balanceKg / 50),
-                ]
-              : [],
-          ],
-          styles: { fontSize: 9 },
-          headStyles: { fillColor: [34, 197, 94] },
-        });
-        doc.save("feed_stock_report.pdf");
-      });
+    import("@/lib/exportUtils").then(({ printAsPDF: nativePDF }) => {
+      const pdfRows = reportData.map((r) => ({
+        "Feed Type": r.feedType,
+        "Opening (kg)": r.openingKg.toLocaleString(),
+        "Received (kg)": r.receivedKg.toLocaleString(),
+        "Issued (kg)": r.issuedKg.toLocaleString(),
+        "Balance (kg)": r.balanceKg.toLocaleString(),
+        "Balance (bags)": Math.round(r.balanceKg / 50),
+      }));
+      nativePDF(pdfRows as Record<string, unknown>[], "Feed Stock Report");
     });
   };
 

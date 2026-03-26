@@ -206,7 +206,7 @@ export default function MyTeam() {
   function handleSave() {
     console.log("[MyTeam] handleSave called, form:", {
       name: form.name,
-      username: form.username,
+      username: form.username.trim().toLowerCase(),
       role: form.role,
       companyId: myCompanyId,
     });
@@ -223,7 +223,7 @@ export default function MyTeam() {
       if (editUser) {
         storage.updateUser(editUser.id, {
           name: form.name,
-          username: form.username.trim(),
+          username: form.username.trim().toLowerCase(),
           password: form.password || editUser.password,
           role: form.role as SubUserRole,
           assignedBranchIds: form.assignedBranchIds,
@@ -242,7 +242,7 @@ export default function MyTeam() {
       } else {
         const newUser = storage.addUser({
           name: form.name.trim(),
-          username: form.username.trim(),
+          username: form.username.trim().toLowerCase(),
           password: form.password.trim(),
           role: form.role as SubUserRole,
           companyId: myCompanyId,

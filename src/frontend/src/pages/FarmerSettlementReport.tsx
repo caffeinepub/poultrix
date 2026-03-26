@@ -104,25 +104,11 @@ export default function FarmerSettlementReport() {
 
   const handleExcelExport = async () => {
     try {
-      const XLSX = await import("xlsx");
-      const data = reportRows.map((r) => ({
-        "Farm Name": r.farmName,
-        "Batch Number": r.batchNumber,
-        "Birds Placed": r.birdsPlaced,
-        "Birds Sold": r.birdsSold,
-        "Mortality %": r.mortalityPct.toFixed(2),
-        "Final FCR": r.finalFCR.toFixed(3),
-        "GC Rate (₹)": r.gcRate,
-        "Total GC (₹)": r.totalGC.toFixed(2),
-        "Medicine Deductions (₹)": r.medicineDeduction.toFixed(2),
-        "Feed Deductions (₹)": r.feedDeduction.toFixed(2),
-        "Other Deductions (₹)": r.otherDeductions.toFixed(2),
-        "Final Payable (₹)": r.finalPayable.toFixed(2),
-      }));
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Settlement Report");
-      XLSX.writeFile(wb, "farmer_settlement_report.xlsx");
+      const { downloadExcel: nativeXLSX } = await import("@/lib/exportUtils");
+      nativeXLSX(
+        reportRows as unknown as Record<string, unknown>[],
+        "farmer_settlement_report.csv",
+      );
       toast.success("Excel exported.");
     } catch {
       toast.error("Export failed.");
@@ -131,45 +117,11 @@ export default function FarmerSettlementReport() {
 
   const handlePDFExport = async () => {
     try {
-      const { jsPDF } = await import("jspdf");
-      const { default: autoTable } = await import("jspdf-autotable");
-      const doc = new jsPDF({ orientation: "landscape" });
-      doc.text("Farmer Settlement Report", 14, 15);
-      autoTable(doc, {
-        startY: 22,
-        head: [
-          [
-            "Farm",
-            "Batch",
-            "Placed",
-            "Sold",
-            "Mort%",
-            "FCR",
-            "GC Rate",
-            "Total GC",
-            "Med Ded",
-            "Feed Ded",
-            "Other Ded",
-            "Final Pay",
-          ],
-        ],
-        body: reportRows.map((r) => [
-          r.farmName,
-          r.batchNumber,
-          r.birdsPlaced,
-          r.birdsSold,
-          r.mortalityPct.toFixed(2),
-          r.finalFCR.toFixed(3),
-          `₹${r.gcRate}`,
-          `₹${r.totalGC.toFixed(0)}`,
-          `₹${r.medicineDeduction.toFixed(0)}`,
-          `₹${r.feedDeduction.toFixed(0)}`,
-          `₹${r.otherDeductions.toFixed(0)}`,
-          `₹${r.finalPayable.toFixed(0)}`,
-        ]),
-        styles: { fontSize: 8 },
-      });
-      doc.save("farmer_settlement_report.pdf");
+      const { printAsPDF: nativePDF } = await import("@/lib/exportUtils");
+      nativePDF(
+        reportRows as unknown as Record<string, unknown>[],
+        "Farmer Settlement Report",
+      );
       toast.success("PDF exported.");
     } catch {
       toast.error("PDF export failed.");

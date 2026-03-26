@@ -82,25 +82,11 @@ export default function GCSettlementReport() {
       return;
     }
     try {
-      const XLSX = await import("xlsx");
-      const data = rows.map((r) => ({
-        "Farm Name": getFarmName(r.farmId),
-        "Batch No": r.batchNumber,
-        "Birds Placed": r.birdsPlaced,
-        "Birds Sold": r.birdsSold,
-        Mortality: r.mortalityCount,
-        "Mortality %": r.mortalityPct.toFixed(2),
-        "Final FCR": r.finalFCR.toFixed(3),
-        "GC Rate (₹)": r.gcRatePerBird,
-        "FCR Bonus (₹)": r.fcrBonus.toFixed(2),
-        "Penalty (₹)": r.mortalityPenalty.toFixed(2),
-        "Total GC Payable (₹)": r.totalGCPayable.toFixed(2),
-        "Closed Date": new Date(r.closedAt).toLocaleDateString(),
-      }));
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "GC Settlement");
-      XLSX.writeFile(wb, "gc-settlement-report.xlsx");
+      const { downloadExcel: nativeXLSX } = await import("@/lib/exportUtils");
+      nativeXLSX(
+        rows as unknown as Record<string, unknown>[],
+        "gc-settlement-report.csv",
+      );
       toast.success("Excel exported.");
     } catch {
       toast.error("Failed to export Excel.");
@@ -113,49 +99,11 @@ export default function GCSettlementReport() {
       return;
     }
     try {
-      const { default: jsPDF } = await import("jspdf");
-      const autoTable = (await import("jspdf-autotable")).default;
-      const doc = new jsPDF({ orientation: "landscape" });
-      doc.setFontSize(14);
-      doc.text("GC Settlement Report", 14, 15);
-      doc.setFontSize(10);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 22);
-      autoTable(doc, {
-        startY: 28,
-        head: [
-          [
-            "Farm",
-            "Batch",
-            "Placed",
-            "Sold",
-            "Mortality",
-            "Mortality%",
-            "FCR",
-            "GC Rate",
-            "Bonus",
-            "Penalty",
-            "Total GC",
-            "Date",
-          ],
-        ],
-        body: rows.map((r) => [
-          getFarmName(r.farmId),
-          r.batchNumber,
-          r.birdsPlaced,
-          r.birdsSold,
-          r.mortalityCount,
-          `${r.mortalityPct.toFixed(2)}%`,
-          r.finalFCR.toFixed(3),
-          `₹${r.gcRatePerBird}`,
-          `₹${r.fcrBonus.toFixed(2)}`,
-          `₹${r.mortalityPenalty.toFixed(2)}`,
-          `₹${r.totalGCPayable.toFixed(2)}`,
-          new Date(r.closedAt).toLocaleDateString(),
-        ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [22, 101, 52] },
-      });
-      doc.save("gc-settlement-report.pdf");
+      const { printAsPDF: nativePDF } = await import("@/lib/exportUtils");
+      nativePDF(
+        rows as unknown as Record<string, unknown>[],
+        "GC Settlement Report",
+      );
       toast.success("PDF exported.");
     } catch {
       toast.error("Failed to export PDF.");

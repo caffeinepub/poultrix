@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "@/lib/react-router-compat";
 import { storage } from "@/lib/storage";
 import { Eye, EyeOff, KeyRound, ShieldAlert } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 const ATTEMPT_KEY = (userId: string) => `pw_change_attempts_${userId}`;

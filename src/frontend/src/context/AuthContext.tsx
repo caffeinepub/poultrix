@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     (username: string, password: string): LoginResult => {
-      const trimmedUsername = username.trim();
+      const trimmedUsername = username.trim().toLowerCase();
       const trimmedPassword = password.trim();
 
       console.log("[AUTH] Login attempt:", { username: trimmedUsername });

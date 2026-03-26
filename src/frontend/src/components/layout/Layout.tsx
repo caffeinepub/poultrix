@@ -10,6 +10,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useAuth } from "@/context/AuthContext";
+import {
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "@/lib/react-router-compat";
 import { storage } from "@/lib/storage";
 import type { User } from "@/lib/storage";
 import { cn } from "@/lib/utils";
@@ -48,7 +54,6 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 type NavChild = {
   label: string;
@@ -306,6 +311,12 @@ const navItems: NavItem[] = [
     label: "Change Password",
     to: "/change-password",
     icon: KeyRound,
+    roles: ["SuperAdmin"],
+  },
+  {
+    label: "Data Migration",
+    to: "/data-migration",
+    icon: ArrowRightLeft,
     roles: ["SuperAdmin"],
   },
 ];

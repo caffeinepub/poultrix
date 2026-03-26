@@ -2,6 +2,21 @@ import { generateSerialNumber } from "./identityGenerator";
 
 export const UNASSIGNED_SENTINEL = "__UNASSIGNED__";
 
+// ---- Environment Detection ----
+export function getEnvironment(): "draft" | "live" | "local" {
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1") return "local";
+  if (host.includes("caffeine.xyz") && !host.startsWith("poultrix-tqy"))
+    return "draft";
+  return "live";
+}
+
+// Log environment once on load
+const _env = getEnvironment();
+console.log(
+  `[ENV] Poultrix running in "${_env}" environment | host: ${window.location.hostname} | storage: localStorage (browser-scoped)`,
+);
+
 export type Farm = {
   id: string;
   name: string;
@@ -636,7 +651,7 @@ export const storage = {
     // Generate serial number
     const serialNumber =
       u.serialNumber || generateSerialNumber(u.role, companyPrefix);
-    const username = u.username?.trim() || "";
+    const username = (u.username?.trim() || "").toLowerCase();
     const n = {
       ...u,
       id: uid(),
@@ -648,18 +663,19 @@ export const storage = {
     return n;
   },
   updateUser: (id: string, updates: Partial<User>) => {
+    const normalizedUpdates = updates.username
+      ? { ...updates, username: updates.username.trim().toLowerCase() }
+      : updates;
     const d = get<User>("px_users").map((u) =>
-      u.id === id ? { ...u, ...updates } : u,
+      u.id === id ? { ...u, ...normalizedUpdates } : u,
     );
     set("px_users", d);
   },
   // Accepts username or email (case-insensitive)
   getUserByUsername: (input: string) => {
-    const lower = input.toLowerCase();
+    const lower = input.trim().toLowerCase();
     return get<User>("px_users").find(
-      (u) =>
-        u.username.toLowerCase() === lower ||
-        (u.email != null && u.email.toLowerCase() === lower),
+      (u) => u.username.toLowerCase() === lower,
     );
   },
   deleteUser: (id: string) =>
@@ -1266,6 +1282,88 @@ export const storage = {
       get<Batch>("px_batches").filter((b) => b.id !== id),
     ),
 };
+
+// ---- Data Migration Helpers ----
+const MIGRATION_KEYS = [
+  "px_users",
+  "px_companies",
+  "px_farms",
+  "px_sheds",
+  "px_batches",
+  "px_zones",
+  "px_branches",
+];
+
+export function exportMigrationData(): string {
+  const snapshot: Record<string, unknown[]> = {};
+  for (const key of MIGRATION_KEYS) {
+    try {
+      snapshot[key] = JSON.parse(localStorage.getItem(key) || "[]");
+    } catch {
+      snapshot[key] = [];
+    }
+  }
+  return JSON.stringify(
+    { version: 1, exportedAt: new Date().toISOString(), data: snapshot },
+    null,
+    2,
+  );
+}
+
+export function importMigrationData(
+  json: string,
+  mode: "merge" | "replace" = "merge",
+): { imported: number; skipped: number; errors: string[] } {
+  let parsed: { version: number; data: Record<string, unknown[]> };
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return { imported: 0, skipped: 0, errors: ["Invalid JSON format"] };
+  }
+  if (!parsed.data)
+    return {
+      imported: 0,
+      skipped: 0,
+      errors: ["Missing data field in import file"],
+    };
+
+  let imported = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const key of MIGRATION_KEYS) {
+    const incoming = parsed.data[key];
+    if (!Array.isArray(incoming)) continue;
+
+    if (mode === "replace") {
+      localStorage.setItem(key, JSON.stringify(incoming));
+      imported += incoming.length;
+    } else {
+      // Merge: add items not already present by id
+      let existing: Array<{ id: string }> = [];
+      try {
+        existing = JSON.parse(localStorage.getItem(key) || "[]");
+      } catch {
+        existing = [];
+      }
+      const existingIds = new Set(existing.map((e) => e.id));
+      const toAdd = (incoming as Array<{ id: string }>).filter((item) => {
+        if (existingIds.has(item.id)) {
+          skipped++;
+          return false;
+        }
+        return true;
+      });
+      localStorage.setItem(key, JSON.stringify([...existing, ...toAdd]));
+      imported += toAdd.length;
+    }
+  }
+
+  console.log(
+    `[MIGRATION] Import complete: ${imported} imported, ${skipped} skipped`,
+  );
+  return { imported, skipped, errors };
+}
 
 // ---- Finance Module Types ----
 export type PendingSettlement = GCSettlement & {

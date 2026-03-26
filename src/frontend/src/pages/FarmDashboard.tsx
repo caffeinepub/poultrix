@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/AuthContext";
+import { useNavigate, useParams } from "@/lib/react-router-compat";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { storage } from "@/lib/storage";
 import {
@@ -17,7 +18,6 @@ import {
   Wheat,
 } from "lucide-react";
 import { useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 
 function daysBetween(from: string, to: string) {
   const d1 = new Date(from);

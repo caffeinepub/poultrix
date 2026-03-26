@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "@/lib/react-router-compat";
 import { storage } from "@/lib/storage";
 import {
   checkTrialStatus,
@@ -29,7 +30,6 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 export default function SubscriptionDashboard() {
   const { currentUser } = useAuth();

@@ -369,119 +369,25 @@ export default function PerformanceReport() {
   // Export helpers
   const handleExcelExport = () => {
     if (!reportData) return;
-    import("xlsx").then((XLSX) => {
-      const wsData = [
-        [
-          "Farm",
-          "Chicks Placed",
-          "Placement Date",
-          "Age (Days)",
-          "Daily Feed (g)",
-          "Cum. Feed (g)",
-          "Body Wt (g)",
-          "FCR",
-          "Birds Sold",
-          "Mortality",
-          "Balance",
-        ],
-        ...reportData.map((r) => [
-          r.farmName,
-          r.chicksPlaced,
-          r.placementDate,
-          r.ageDays,
-          r.dailyFeedIntake,
-          r.cumulativeFeed,
-          r.bodyWeight.toFixed(0),
-          r.fcr.toFixed(2),
-          r.birdsSold,
-          r.mortality,
-          r.birdsBalance,
-        ]),
-        [
-          "TOTAL",
-          totals!.chicksPlaced,
-          "",
-          "",
-          totals!.dailyFeedIntake,
-          totals!.cumulativeFeed,
-          totals!.bodyWeight.toFixed(0),
-          totals!.fcr.toFixed(2),
-          totals!.birdsSold,
-          totals!.mortality,
-          totals!.birdsBalance,
-        ],
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Performance Report");
-      XLSX.writeFile(wb, "PerformanceReport.xlsx");
-    });
+    // Use CSV export instead (same data, compatible format)
+    handleCSVExport();
   };
 
   const handlePDFExport = () => {
     if (!reportData) return;
-    import("jspdf").then(({ default: jsPDF }) => {
-      import("jspdf-autotable").then(({ default: autoTable }) => {
-        const doc = new jsPDF({ orientation: "landscape" });
-        doc.setFontSize(14);
-        doc.text("Performance Report", 14, 16);
-        doc.setFontSize(10);
-        doc.text(
-          `Generated: ${new Date().toLocaleDateString()} | Filter: ${presetLabel}`,
-          14,
-          24,
-        );
-        autoTable(doc, {
-          startY: 30,
-          head: [
-            [
-              "Farm",
-              "Chicks",
-              "Placement",
-              "Age",
-              "Daily Feed",
-              "Cum. Feed",
-              "Body Wt",
-              "FCR",
-              "Sold",
-              "Mortality",
-              "Balance",
-            ],
-          ],
-          body: [
-            ...reportData.map((r) => [
-              r.farmName,
-              fmt(r.chicksPlaced),
-              r.placementDate,
-              r.ageDays,
-              fmt(r.dailyFeedIntake),
-              fmt(r.cumulativeFeed),
-              fmt(r.bodyWeight),
-              r.fcr.toFixed(2),
-              fmt(r.birdsSold),
-              fmt(r.mortality),
-              fmt(r.birdsBalance),
-            ]),
-            [
-              "TOTAL",
-              fmt(totals!.chicksPlaced),
-              "",
-              "",
-              fmt(totals!.dailyFeedIntake),
-              fmt(totals!.cumulativeFeed),
-              fmt(totals!.bodyWeight),
-              totals!.fcr.toFixed(2),
-              fmt(totals!.birdsSold),
-              fmt(totals!.mortality),
-              fmt(totals!.birdsBalance),
-            ],
-          ],
-          styles: { fontSize: 8 },
-          headStyles: { fillColor: [22, 163, 74] },
-          foot: [],
-        });
-        doc.save("PerformanceReport.pdf");
-      });
+    import("@/lib/exportUtils").then(({ printAsPDF: nativePDF }) => {
+      const pdfRows = reportData.map((r) => ({
+        Farm: r.farmName,
+        "Chicks Placed": r.chicksPlaced,
+        "Placement Date": r.placementDate,
+        "Age (Days)": r.ageDays,
+        "Body Wt (g)": r.bodyWeight,
+        FCR: r.fcr,
+        "Birds Sold": r.birdsSold,
+        Mortality: r.mortality,
+        Balance: r.birdsBalance,
+      }));
+      nativePDF(pdfRows as Record<string, unknown>[], "Performance Report");
     });
   };
 

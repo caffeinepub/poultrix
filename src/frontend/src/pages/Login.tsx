@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "@/lib/react-router-compat";
 import { storage } from "@/lib/storage";
 import {
   Award,
@@ -19,9 +20,9 @@ import {
   Pill,
   Scale,
   User,
+  X,
 } from "lucide-react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
 const highlights = [
   { icon: Bird, label: "Chick Batch Management" },
@@ -35,9 +36,8 @@ const highlights = [
 ];
 
 const ERROR_MESSAGES: Record<string, string> = {
-  user_not_found: "Invalid Username. No account found with this username.",
-  wrong_password:
-    "Incorrect Password. Please check your password and try again.",
+  user_not_found: "User not found",
+  wrong_password: "Incorrect password",
   inactive: "Account is inactive. Please contact your administrator.",
 };
 
@@ -49,6 +49,32 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowModal(false);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = showModal ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showModal]);
+
+  const openModal = () => {
+    setError("");
+    setUsername("");
+    setPassword("");
+    setShowModal(true);
+  };
+
+  const closeModal = () => setShowModal(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,22 +102,31 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col bg-green-50">
-      {/* Top Header Bar */}
-      <header className="bg-green-900 text-white py-3 px-6 flex items-center justify-center gap-3 shadow-md">
-        <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center flex-shrink-0">
-          <Bird size={18} className="text-white" />
+      {/* Header */}
+      <header className="bg-green-900 text-white py-3 px-6 flex items-center justify-between shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center flex-shrink-0">
+            <Bird size={18} className="text-white" />
+          </div>
+          <span className="text-lg font-bold tracking-wide">Poultrix</span>
+          <span className="text-green-400 hidden sm:inline">|</span>
+          <span className="text-green-200 text-sm hidden sm:inline">
+            Smart Poultry Farm Management System
+          </span>
         </div>
-        <span className="text-lg font-bold tracking-wide">Poultrix</span>
-        <span className="text-green-400 hidden sm:inline">|</span>
-        <span className="text-green-200 text-sm hidden sm:inline">
-          Smart Poultry Farm Management System
-        </span>
+        <button
+          type="button"
+          onClick={openModal}
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-200 shadow hover:shadow-md"
+        >
+          <User size={15} />
+          Login
+        </button>
       </header>
 
       {/* Main Content */}
       <main className="flex-1">
         <div className="max-w-7xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-10 items-start">
-          {/* Left: Info Section */}
           <section className="space-y-8">
             <div>
               <h1 className="text-3xl xl:text-4xl font-bold text-green-900 leading-tight mb-4">
@@ -109,7 +144,6 @@ export default function Login() {
               </p>
             </div>
 
-            {/* Feature Highlights */}
             <div>
               <h2 className="text-sm font-semibold text-green-700 uppercase tracking-wider mb-4">
                 Platform Features
@@ -131,7 +165,6 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Stats bar */}
             <div className="grid grid-cols-3 gap-4 bg-green-900 rounded-2xl p-5 text-white">
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-300">500+</div>
@@ -150,9 +183,19 @@ export default function Login() {
                 <div className="text-xs text-green-200 mt-0.5">Uptime SLA</div>
               </div>
             </div>
+
+            <div className="flex justify-center lg:justify-start">
+              <button
+                type="button"
+                onClick={openModal}
+                className="inline-flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 text-sm"
+              >
+                <User size={16} />
+                Login to Poultrix
+              </button>
+            </div>
           </section>
 
-          {/* Right: Hero Image */}
           <section className="relative rounded-2xl overflow-hidden shadow-xl min-h-[400px] lg:min-h-[560px] hidden lg:block">
             <img
               src="/assets/generated/poultry-farm-hero.dim_900x700.jpg"
@@ -224,115 +267,140 @@ export default function Login() {
         </div>
       </footer>
 
-      {/* Fixed Login Modal Overlay */}
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
-      >
-        <div
-          className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8"
-          style={{
-            animation: "loginModalIn 0.25s ease-out both",
-          }}
-        >
-          {/* Modal Header */}
-          <div className="flex flex-col items-center mb-6">
+      {/* Login Modal */}
+      {showModal && (
+        <>
+          {/* Backdrop */}
+          <button
+            type="button"
+            aria-label="Close modal"
+            className="fixed inset-0 z-40 w-full h-full cursor-default"
+            style={{
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(4px)",
+            }}
+            onClick={closeModal}
+          />
+          {/* Modal */}
+          <div
+            ref={modalRef}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+          >
             <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3 shadow-md"
-              style={{
-                background: "linear-gradient(135deg, #16a34a, #15803d)",
-              }}
+              className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 relative pointer-events-auto"
+              style={{ animation: "loginModalIn 0.25s ease-out both" }}
             >
-              <Bird size={28} className="text-white" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">Welcome Back</h2>
-            <p className="text-sm text-gray-500 mt-1 text-center">
-              Sign in to your Poultrix account
-            </p>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="username"
-                className="text-sm font-medium text-gray-700"
+              <button
+                type="button"
+                onClick={closeModal}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors rounded-full p-1 hover:bg-gray-100"
+                aria-label="Close login"
               >
-                User
-              </Label>
-              <Input
-                id="username"
-                type="text"
-                autoComplete="username"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="h-10 border-gray-200 focus:border-green-500 focus:ring-green-500"
-                data-ocid="login.input"
-              />
-            </div>
+                <X size={18} />
+              </button>
 
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="password"
-                className="text-sm font-medium text-gray-700"
-              >
-                Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-10 pr-10 border-gray-200 focus:border-green-500 focus:ring-green-500"
-                  data-ocid="login.password.input"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  data-ocid="login.secondary_button"
+              <div className="flex flex-col items-center mb-6">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3 shadow-md"
+                  style={{
+                    background: "linear-gradient(135deg, #16a34a, #15803d)",
+                  }}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                  <Bird size={28} className="text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Welcome Back
+                </h2>
+                <p className="text-sm text-gray-500 mt-1 text-center">
+                  Sign in to your Poultrix account
+                </p>
               </div>
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="username"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    User
+                  </Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    className="h-10 border-gray-200 focus:border-green-500 focus:ring-green-500"
+                    data-ocid="login.input"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="password"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="h-10 pr-10 border-gray-200 focus:border-green-500 focus:ring-green-500"
+                      data-ocid="login.password.input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      data-ocid="login.secondary_button"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div
+                    className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+                    data-ocid="login.error_state"
+                  >
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-10 font-semibold text-white transition-all duration-200 hover:shadow-lg hover:shadow-green-200"
+                  style={{
+                    background: loading
+                      ? "#86efac"
+                      : "linear-gradient(135deg, #16a34a, #15803d)",
+                  }}
+                  data-ocid="login.submit_button"
+                >
+                  {loading ? "Signing in..." : "Sign In"}
+                </Button>
+              </form>
+
+              <p className="text-center text-xs text-gray-400 mt-5">
+                Poultrix – Smart Automation for Poultry Business Management
+              </p>
             </div>
-
-            {error && (
-              <div
-                className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2"
-                data-ocid="login.error_state"
-              >
-                {error}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full h-10 font-semibold text-white transition-all duration-200 hover:shadow-lg hover:shadow-green-200"
-              style={{
-                background: loading
-                  ? "#86efac"
-                  : "linear-gradient(135deg, #16a34a, #15803d)",
-              }}
-              data-ocid="login.submit_button"
-            >
-              {loading ? "Signing in..." : "Sign In"}
-            </Button>
-          </form>
-
-          <p className="text-center text-xs text-gray-400 mt-5">
-            Poultrix – Smart Automation for Poultry Business Management
-          </p>
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
       <style>{`
         @keyframes loginModalIn {

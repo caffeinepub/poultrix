@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { logDelete } from "@/lib/auditHelper";
 import { usePermissions } from "@/lib/permissions";
 import { printRecord } from "@/lib/printRecord";
+import { useNavigate } from "@/lib/react-router-compat";
 import { useCompanyScope } from "@/lib/roleFilter";
 import { type Batch, type Farm, type Shed, storage } from "@/lib/storage";
 import {
@@ -29,7 +30,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 const BREEDS = ["Cobb", "Ross", "Hubbard", "Other"];
 
