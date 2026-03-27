@@ -83,11 +83,11 @@ export default function Login() {
 
   const closeModal = () => setShowModal(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const result = login(username.trim(), password.trim());
+    const result = await login(username.trim(), password.trim());
     setLoading(false);
     if (result.success) {
       const user = storage.getUserByUsername(username.trim());
@@ -427,6 +427,14 @@ export default function Login() {
               <p className="text-center text-xs text-gray-400 mt-5">
                 Poultrix – Smart Automation for Poultry Business Management
               </p>
+              <div className="text-center mt-2">
+                <a
+                  href="mailto:poultrixindia@gmail.com"
+                  className="text-xs text-green-600 hover:text-green-700 hover:underline transition-colors"
+                >
+                  📧 poultrixindia@gmail.com
+                </a>
+              </div>
             </div>
           </div>
         </>

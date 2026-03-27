@@ -1,3 +1,4 @@
+import { pullFromCanister } from "@/lib/canisterSync";
 import { type User, storage } from "@/lib/storage";
 import {
   createContext,
@@ -21,9 +22,10 @@ type LoginResult = {
 type AuthContextType = {
   currentUser: User | null;
   companyId: string | undefined;
-  login: (username: string, password: string) => LoginResult;
+  login: (username: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   hasRole: (roles: User["role"][]) => boolean;
+  isSyncing: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!sessionId) return null;
     return storage.getUsers().find((u) => u.id === sessionId) ?? null;
   });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -44,28 +47,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [currentUser]);
 
   const login = useCallback(
-    (username: string, password: string): LoginResult => {
+    async (username: string, password: string): Promise<LoginResult> => {
       const trimmedUsername = username.trim().toLowerCase();
       const trimmedPassword = password.trim();
 
       console.log("[AUTH] Login attempt:", { username: trimmedUsername });
 
-      const user = storage.getUserByUsername(trimmedUsername);
+      // First try localStorage (has seeded users)
+      let user = storage.getUserByUsername(trimmedUsername);
+
+      // If not found locally, pull from canister and retry
+      // This handles cross-device login where user was created on another device
+      if (!user) {
+        console.log("[AUTH] User not found locally, pulling from canister...");
+        setIsSyncing(true);
+        await pullFromCanister();
+        setIsSyncing(false);
+        user = storage.getUserByUsername(trimmedUsername);
+      }
 
       console.log(
-        "[AUTH] User found in DB:",
+        "[AUTH] User found:",
         user
           ? {
               username: user.username,
               role: user.role,
               companyId: user.companyId,
-              active: user.active,
             }
           : "NOT FOUND",
-      );
-      console.log(
-        "[AUTH] Password match:",
-        user ? user.password === trimmedPassword : false,
       );
 
       if (!user) {
@@ -83,6 +92,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user.password !== trimmedPassword) {
         return { success: false, error: "wrong_password" };
       }
+
+      // Pull all data from canister in background after login
+      // so all modules show the same data as on other devices
+      pullFromCanister().catch(() => {});
 
       setCurrentUser(user);
       return { success: true };
@@ -105,8 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const companyId = currentUser?.companyId;
 
   const value = useMemo(
-    () => ({ currentUser, companyId, login, logout, hasRole }),
-    [currentUser, companyId, login, logout, hasRole],
+    () => ({ currentUser, companyId, login, logout, hasRole, isSyncing }),
+    [currentUser, companyId, login, logout, hasRole, isSyncing],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

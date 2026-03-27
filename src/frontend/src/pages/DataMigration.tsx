@@ -11,6 +11,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { pullFromCanister, pushAllToCanister } from "@/lib/canisterSync";
 import {
   exportMigrationData,
   getEnvironment,
@@ -39,6 +40,37 @@ export default function DataMigration() {
   const fileRef = useRef<HTMLInputElement>(null);
   const env = getEnvironment();
   const userCount = storage.getUsers().length;
+  const [canisterSyncing, setCanisterSyncing] = useState(false);
+
+  async function handlePushToCanister() {
+    setCanisterSyncing(true);
+    try {
+      await pushAllToCanister();
+      toast.success("All data pushed to cloud canister successfully!");
+    } catch {
+      toast.error("Push to canister failed.");
+    } finally {
+      setCanisterSyncing(false);
+    }
+  }
+
+  async function handlePullFromCanister() {
+    setCanisterSyncing(true);
+    try {
+      const synced = await pullFromCanister();
+      if (synced) {
+        toast.success(
+          "Data pulled from cloud canister. Refresh to see updated data.",
+        );
+      } else {
+        toast.info("Canister is empty. Your local data is up to date.");
+      }
+    } catch {
+      toast.error("Pull from canister failed.");
+    } finally {
+      setCanisterSyncing(false);
+    }
+  }
 
   function handleExport() {
     const json = exportMigrationData();
@@ -92,6 +124,45 @@ export default function DataMigration() {
           another.
         </p>
       </div>
+
+      {/* Cloud Canister Sync */}
+      <Card className="border-green-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-green-800">
+            <Database className="h-5 w-5" />
+            Cloud Canister Sync
+          </CardTitle>
+          <CardDescription>
+            Sync data to/from the ICP canister so all browsers and devices see
+            the same data.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-3 flex-wrap">
+            <Button
+              onClick={handlePushToCanister}
+              disabled={canisterSyncing}
+              className="bg-green-700 hover:bg-green-800 text-white"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {canisterSyncing ? "Syncing..." : "Push All Data to Cloud"}
+            </Button>
+            <Button
+              onClick={handlePullFromCanister}
+              disabled={canisterSyncing}
+              variant="outline"
+              className="border-green-700 text-green-700 hover:bg-green-50"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {canisterSyncing ? "Syncing..." : "Pull Data from Cloud"}
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            After login, data auto-syncs from the cloud canister to your
+            browser. Use "Push" once to migrate existing data to the cloud.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Environment Info */}
       <Alert className="border-blue-200 bg-blue-50">

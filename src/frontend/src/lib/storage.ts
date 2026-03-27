@@ -1,3 +1,4 @@
+import { pushToCanister } from "./canisterSync";
 import { generateSerialNumber } from "./identityGenerator";
 
 export const UNASSIGNED_SENTINEL = "__UNASSIGNED__";
@@ -372,6 +373,7 @@ function get<T>(key: string): T[] {
 }
 function set<T>(key: string, data: T[]) {
   localStorage.setItem(key, JSON.stringify(data));
+  pushToCanister(key, data as unknown[]);
 }
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -703,11 +705,58 @@ export const storage = {
 
   // Signup Requests
   getSignupRequests: () => get<SignupRequest>("px_signup_requests"),
-  addSignupRequest: (req: Omit<SignupRequest, "id">) => {
+  addSignupRequest: (
+    req: Omit<SignupRequest, "id">,
+  ): { success: boolean; error?: string; data?: SignupRequest } => {
     const d = get<SignupRequest>("px_signup_requests");
+    const allUsers = get<User>("px_users");
+    const emailLower = req.email.trim().toLowerCase();
+    const mobileTrim = req.mobileNumber.trim();
+    // Check duplicates in signup requests
+    const dupReq = d.find(
+      (r) =>
+        r.email.toLowerCase() === emailLower ||
+        r.mobileNumber.trim() === mobileTrim,
+    );
+    if (dupReq) {
+      console.warn(
+        "[SIGNUP] Duplicate found in signup requests:",
+        dupReq.email,
+        dupReq.mobileNumber,
+      );
+      return {
+        success: false,
+        error: "User already exists with this email or mobile number",
+      };
+    }
+    // Check duplicates in active users
+    const dupUser = allUsers.find(
+      (u) =>
+        (u.email && u.email.toLowerCase() === emailLower) ||
+        (u.mobileNumber && u.mobileNumber.trim() === mobileTrim),
+    );
+    if (dupUser) {
+      console.warn(
+        "[SIGNUP] Duplicate found in users:",
+        dupUser.email,
+        dupUser.mobileNumber,
+      );
+      return {
+        success: false,
+        error: "User already exists with this email or mobile number",
+      };
+    }
     const n = { ...req, id: uid() };
     set("px_signup_requests", [...d, n]);
-    return n;
+    console.log(
+      "[SIGNUP] Request saved:",
+      n.id,
+      n.email,
+      n.mobileNumber,
+      "status:",
+      n.status,
+    );
+    return { success: true, data: n };
   },
   updateSignupRequest: (id: string, updates: Partial<SignupRequest>) => {
     const d = get<SignupRequest>("px_signup_requests").map((r) =>

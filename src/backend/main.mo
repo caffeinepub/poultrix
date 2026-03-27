@@ -1,29 +1,26 @@
-import Time "mo:core/Time";
 import Map "mo:core/Map";
-import List "mo:core/List";
-import Array "mo:core/Array";
-import Int "mo:core/Int";
 
 actor {
+  // ---- Legacy types (kept for stable variable compatibility) ----
   type FarmId = Nat;
   type ShedId = Nat;
   type BatchId = Nat;
 
-  type Farm = {
+  type LegacyFarm = {
     id : FarmId;
     name : Text;
     location : Text;
     totalCapacity : Nat;
   };
 
-  type Shed = {
+  type LegacyShed = {
     id : ShedId;
     farmId : FarmId;
     name : Text;
     capacity : Nat;
   };
 
-  type Batch = {
+  type LegacyBatch = {
     id : BatchId;
     batchNumber : Text;
     placementDate : Int;
@@ -36,146 +33,122 @@ actor {
     farmId : FarmId;
     shedId : ShedId;
     birdsAlive : Nat;
-    status : Text; // "active", "sold", "closed"
+    status : Text;
   };
 
-  type FeedPurchase = {
-    id : Nat;
-    supplierName : Text;
-    feedType : Text;
-    quantityBags : Nat;
-    ratePerBag : Nat;
-    discountAmount : Nat;
-    totalAmount : Nat;
-    purchaseDate : Int;
-  };
+  // ---- Legacy stable vars (must be kept to allow upgrade from old version) ----
+  stable var nextFarmId : Nat = 1;
+  stable var nextShedId : Nat = 1;
+  stable var nextBatchId : Nat = 1;
+  stable var timestamp : Int = 0;
+  let farmsMap = Map.empty<FarmId, LegacyFarm>();
+  let shedsMap = Map.empty<ShedId, LegacyShed>();
+  let batchesMap = Map.empty<BatchId, LegacyBatch>();
 
-  type FeedStock = {
-    id : Nat;
-    farmId : FarmId;
-    feedType : Text;
-    currentStockBags : Nat;
-    alertThresholdBags : Nat;
-  };
+  // ---- New centralized JSON storage ----
+  stable var usersJson : Text = "[]";
+  stable var companiesJson : Text = "[]";
+  stable var zonesJson : Text = "[]";
+  stable var branchesJson : Text = "[]";
+  stable var farmsJson : Text = "[]";
+  stable var shedsJson : Text = "[]";
+  stable var batchesJson : Text = "[]";
+  stable var dailyEntriesJson : Text = "[]";
+  stable var feedTypesJson : Text = "[]";
+  stable var feedSuppliersJson : Text = "[]";
+  stable var feedPurchasesJson : Text = "[]";
+  stable var feedStocksJson : Text = "[]";
+  stable var feedIssuesJson : Text = "[]";
+  stable var birdSalesJson : Text = "[]";
+  stable var expensesJson : Text = "[]";
+  stable var signupRequestsJson : Text = "[]";
+  stable var auditLogsJson : Text = "[]";
+  stable var paymentsJson : Text = "[]";
+  stable var subscriptionsJson : Text = "[]";
+  stable var notificationsJson : Text = "[]";
 
-  type FeedIssue = {
-    id : Nat;
-    farmId : FarmId;
-    shedId : ShedId;
-    feedType : Text;
-    quantityBags : Nat;
-    issueDate : Int;
-    batchId : ?BatchId;
-  };
+  public func setUsers(json : Text) : async () { usersJson := json };
+  public query func getUsers() : async Text { usersJson };
 
-  type DailyEntry = {
-    id : Nat;
-    batchId : BatchId;
-    entryDate : Int;
-    birdsAlive : Nat;
-    mortalityCount : Nat;
-    cullBirds : Nat;
-    feedIntakeGrams : Nat;
-    bodyWeightGrams : Nat;
-    waterConsumptionLiters : Nat;
-    fcr : Float;
-    avgWeight : Float;
-    mortalityPct : Float;
-    cumulativeFeed : Nat;
-  };
+  public func setCompanies(json : Text) : async () { companiesJson := json };
+  public query func getCompanies() : async Text { companiesJson };
 
-  type BirdSale = {
-    id : Nat;
-    farmId : FarmId;
-    batchId : BatchId;
-    birdsQty : Nat;
-    avgWeightKg : Float;
-    ratePerKg : Nat;
-    totalWeightKg : Float;
-    totalAmount : Nat;
-    traderName : Text;
-    vehicleNumber : Text;
-    dispatchDate : Int;
-  };
+  public func setZones(json : Text) : async () { zonesJson := json };
+  public query func getZones() : async Text { zonesJson };
 
-  var nextFarmId = 1;
-  var nextShedId = 1;
-  var nextBatchId = 1;
-  var timestamp = 0;
+  public func setBranches(json : Text) : async () { branchesJson := json };
+  public query func getBranches() : async Text { branchesJson };
 
-  let farmsMap = Map.empty<FarmId, Farm>();
-  let shedsMap = Map.empty<ShedId, Shed>();
-  let batchesMap = Map.empty<BatchId, Batch>();
+  public func setFarms(json : Text) : async () { farmsJson := json };
+  public query func getFarms() : async Text { farmsJson };
 
-  // CRUD Operations
-  public shared ({ caller }) func createFarm(name : Text, location : Text, totalCapacity : Nat) : async FarmId {
-    let id = nextFarmId;
-    nextFarmId += 1;
-    let farm : Farm = {
-      id;
-      name;
-      location;
-      totalCapacity;
-    };
-    farmsMap.add(id, farm);
-    id;
-  };
+  public func setSheds(json : Text) : async () { shedsJson := json };
+  public query func getSheds() : async Text { shedsJson };
 
-  public query ({ caller }) func getFarm(id : FarmId) : async ?Farm {
-    farmsMap.get(id);
-  };
+  public func setBatches(json : Text) : async () { batchesJson := json };
+  public query func getBatches() : async Text { batchesJson };
 
-  public shared ({ caller }) func createShed(farmId : FarmId, name : Text, capacity : Nat) : async ShedId {
-    let id = nextShedId;
-    nextShedId += 1;
-    let shed : Shed = {
-      id;
-      farmId;
-      name;
-      capacity;
-    };
-    shedsMap.add(id, shed);
-    id;
-  };
+  public func setDailyEntries(json : Text) : async () { dailyEntriesJson := json };
+  public query func getDailyEntries() : async Text { dailyEntriesJson };
 
-  public query ({ caller }) func getShed(id : ShedId) : async ?Shed {
-    shedsMap.get(id);
-  };
+  public func setFeedTypes(json : Text) : async () { feedTypesJson := json };
+  public query func getFeedTypes() : async Text { feedTypesJson };
 
-  public shared ({ caller }) func createBatch(placementDate : Int, hatcheryName : Text, breedType : Text, chicksQty : Nat, chicksRate : Nat, transportCost : Nat, totalPlacementCost : Nat, farmId : FarmId, shedId : ShedId) : async BatchId {
-    let id = nextBatchId;
-    nextBatchId += 1;
-    let batchNumber = "BATCH-" # timestamp.toText();
-    let batch : Batch = {
-      id;
-      batchNumber;
-      placementDate;
-      hatcheryName;
-      breedType;
-      chicksQty;
-      chicksRate;
-      transportCost;
-      totalPlacementCost;
-      farmId;
-      shedId;
-      birdsAlive = chicksQty;
-      status = "active";
-    };
-    batchesMap.add(id, batch);
-    id;
-  };
+  public func setFeedSuppliers(json : Text) : async () { feedSuppliersJson := json };
+  public query func getFeedSuppliers() : async Text { feedSuppliersJson };
 
-  public query ({ caller }) func getBatch(id : BatchId) : async ?Batch {
-    batchesMap.get(id);
-  };
+  public func setFeedPurchases(json : Text) : async () { feedPurchasesJson := json };
+  public query func getFeedPurchases() : async Text { feedPurchasesJson };
 
-  public shared ({ caller }) func updateBirdsAlive(batchId : BatchId, birdsAlive : Nat) : async () {
-    switch (batchesMap.get(batchId)) {
-      case (null) {};
-      case (?batch) {
-        let updatedBatch = { batch with birdsAlive };
-        batchesMap.add(batchId, updatedBatch);
-      };
-    };
+  public func setFeedStocks(json : Text) : async () { feedStocksJson := json };
+  public query func getFeedStocks() : async Text { feedStocksJson };
+
+  public func setFeedIssues(json : Text) : async () { feedIssuesJson := json };
+  public query func getFeedIssues() : async Text { feedIssuesJson };
+
+  public func setBirdSales(json : Text) : async () { birdSalesJson := json };
+  public query func getBirdSales() : async Text { birdSalesJson };
+
+  public func setExpenses(json : Text) : async () { expensesJson := json };
+  public query func getExpenses() : async Text { expensesJson };
+
+  public func setSignupRequests(json : Text) : async () { signupRequestsJson := json };
+  public query func getSignupRequests() : async Text { signupRequestsJson };
+
+  public func setAuditLogs(json : Text) : async () { auditLogsJson := json };
+  public query func getAuditLogs() : async Text { auditLogsJson };
+
+  public func setPayments(json : Text) : async () { paymentsJson := json };
+  public query func getPayments() : async Text { paymentsJson };
+
+  public func setSubscriptions(json : Text) : async () { subscriptionsJson := json };
+  public query func getSubscriptions() : async Text { subscriptionsJson };
+
+  public func setNotifications(json : Text) : async () { notificationsJson := json };
+  public query func getNotifications() : async Text { notificationsJson };
+
+  public query func exportAll() : async Text {
+    "{" #
+    "\"users\":" # usersJson # "," #
+    "\"companies\":" # companiesJson # "," #
+    "\"zones\":" # zonesJson # "," #
+    "\"branches\":" # branchesJson # "," #
+    "\"farms\":" # farmsJson # "," #
+    "\"sheds\":" # shedsJson # "," #
+    "\"batches\":" # batchesJson # "," #
+    "\"dailyEntries\":" # dailyEntriesJson # "," #
+    "\"feedTypes\":" # feedTypesJson # "," #
+    "\"feedSuppliers\":" # feedSuppliersJson # "," #
+    "\"feedPurchases\":" # feedPurchasesJson # "," #
+    "\"feedStocks\":" # feedStocksJson # "," #
+    "\"feedIssues\":" # feedIssuesJson # "," #
+    "\"birdSales\":" # birdSalesJson # "," #
+    "\"expenses\":" # expensesJson # "," #
+    "\"signupRequests\":" # signupRequestsJson # "," #
+    "\"auditLogs\":" # auditLogsJson # "," #
+    "\"payments\":" # paymentsJson # "," #
+    "\"subscriptions\":" # subscriptionsJson # "," #
+    "\"notifications\":" # notificationsJson #
+    "}"
   };
 };
