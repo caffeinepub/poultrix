@@ -1,41 +1,39 @@
-# Poultrix – Signup & Admin Approval Workflow
+# Poultrix
 
 ## Current State
-- Login page has a single "Login" button in the header that opens a centered modal
-- Modal has Username + Password fields only
-- Footer shows `sukhvinderprofess@gmail.com`
-- User type includes `active?: boolean` for enabling/disabling accounts
-- No signup flow exists; users are only created by admins from User Management or My Team
-- No pending/rejected status on users
+- Data stored in localStorage as primary, canister as secondary (manual migration required)
+- Multiple seeded users hardcoded in storage.ts (superadmin, demo1990, sukhvinder9929, admin123, supervisor01, testadmin, etc.)
+- On login, canister pull only happens if user not found locally
+- pushToCanister is fire-and-forget and may silently fail
+- Cross-device sync works only if user manually clicks 'Push All Data to Cloud'
+- App re-seeds all users from code on every page load, which can overwrite canister data
 
 ## Requested Changes (Diff)
 
 ### Add
-- `SignupRequest` type in storage.ts with fields: id, fullName, mobileNumber, email, farmName, state, city, role (Farmer/Dealer/Company), birdCapacity (integer), password, status (pending/approved/rejected), createdAt, userId (set on approval)
-- `getSignupRequests()`, `addSignupRequest()`, `updateSignupRequest()` storage methods
-- `SignupRequests.tsx` admin page listing all pending signup requests with Approve/Reject actions
-- On approval: auto-generate userId (FARM001, DEALER001, ADM001 format with incrementing counter), set status=approved, create User record with active=true, status='active'
-- On rejection: set status=rejected
-- `Signup.tsx` — dedicated signup modal triggered by "Sign Up" button (NOT the login modal)
-- Sign Up button in the header next to Login button (separate, not merged)
-- Support email updated to `poultrixindia@gmail.com` with clickable mailto link in footer
-- Route `/signup-requests` for SignupRequests page
-- Sidebar entry "Signup Requests" visible to SuperAdmin only
+- App-level initialization that ALWAYS pulls data from canister on startup before any UI renders
+- On every storage write (addUser, addFarm, etc.), push the updated collection to canister reliably
+- Single-device login: store active session token in canister; second login shows 'You are logged in on another device. Continue here?'
+- On login: full canister pull overwrites localStorage completely (no merge, fresh load)
 
 ### Modify
-- `Login.tsx` — Add separate "Sign Up" button in header (next to Login), update footer email to `poultrixindia@gmail.com` with mailto link
-- `AuthContext.tsx` — login() checks for signup status: if user has `signupStatus='pending'` → error `account_pending`; if `signupStatus='rejected'` → error `account_rejected`. Only `active=true` users can login.
-- `storage.ts` — Add SignupRequest type/storage, add `signupStatus` field to User type
-- `App.tsx` — Add `/signup-requests` route (SuperAdmin protected)
-- Sidebar — Add "Signup Requests" link under Users section for SuperAdmin
+- storage.ts: Remove ALL seeded users except superadmin / Admin@123. Remove all other seed data. Canister is source of truth.
+- AuthContext.tsx: On app init, pull from canister before resolving session. Login always pulls fresh from canister.
+- canisterSync.ts: More reliable push with proper error handling. Push is awaited (not fire-and-forget) for critical operations like user creation.
+- Login.tsx: After signup approval, user is written to canister immediately.
+- SignupRequests.tsx: On approve, push updated users to canister immediately.
 
 ### Remove
-- Old contact email `sukhvinderprofess@gmail.com` from footer (replace with new one)
+- All seeded users in storage.ts except superadmin
+- All seeded companies, farms, sheds, batches, daily entries in storage.ts
+- DataMigration.tsx page (no longer needed - canister is always the source)
+- DataMigration route in App.tsx
+- DataMigration link in sidebar
 
 ## Implementation Plan
-1. Add `SignupRequest` type + storage methods to `storage.ts`; add `signupStatus` to User type
-2. Update `AuthContext.tsx` login to return pending/rejected errors and check signupStatus
-3. Create `Signup.tsx` with all required fields and pending confirmation screen
-4. Update `Login.tsx` — add Sign Up button, update email in footer, update error messages
-5. Create `SignupRequests.tsx` admin page with approval/rejection and auto userId generation
-6. Update `App.tsx` with new route and sidebar with new nav link
+1. Rewrite canisterSync.ts: pullFromCanister clears localStorage and loads fresh from canister. pushToCanister awaits and retries once on failure.
+2. Rewrite storage.ts: Only seed superadmin user if no users found in canister. Remove all other seed data.
+3. Rewrite AuthContext.tsx: On mount, always pull from canister first. On login, do fresh canister pull. Store session token in canister for single-device enforcement.
+4. Update SignupRequests.tsx: After approve/reject, push users collection to canister.
+5. Remove DataMigration page and its sidebar link.
+6. Validate and deploy.

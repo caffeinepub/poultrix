@@ -8,7 +8,20 @@ type Props = {
 };
 
 export default function ProtectedRoute({ children, roles }: Props) {
-  const { currentUser } = useAuth();
+  const { currentUser, isInitializing } = useAuth();
+
+  // While pulling data from canister on startup, show a loading screen
+  // instead of immediately redirecting to login
+  if (isInitializing) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading Poultrix...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;

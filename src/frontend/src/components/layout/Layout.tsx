@@ -320,12 +320,6 @@ const navItems: NavItem[] = [
     icon: KeyRound,
     roles: ["SuperAdmin"],
   },
-  {
-    label: "Data Migration",
-    to: "/data-migration",
-    icon: ArrowRightLeft,
-    roles: ["SuperAdmin"],
-  },
 ];
 
 function NavGroup({

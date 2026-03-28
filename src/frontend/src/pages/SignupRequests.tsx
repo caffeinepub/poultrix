@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { pushCollectionToCanister } from "@/lib/canisterSync";
 import { storage } from "@/lib/storage";
 import type { SignupRequest } from "@/lib/storage";
 import { CheckCircle, Clock, UserPlus, XCircle } from "lucide-react";
@@ -19,10 +20,10 @@ export default function SignupRequests() {
 
   const filtered = requests.filter((r) => tab === "all" || r.status === tab);
 
-  const handleApprove = (req: SignupRequest) => {
+  const handleApprove = async (req: SignupRequest) => {
     const userId = storage.generateUserId(req.role);
     storage.addUser({
-      username: userId.toLowerCase(),
+      username: (req.username || userId).toLowerCase(),
       password: req.password,
       name: req.fullName,
       role: req.role === "Company" ? "CompanyAdmin" : req.role,
@@ -32,12 +33,19 @@ export default function SignupRequests() {
       signupStatus: "approved",
     });
     storage.updateSignupRequest(req.id, { status: "approved", userId });
-    toast.success(`User approved. User ID: ${userId}`);
+    // Push to canister immediately so other devices see the new user
+    const users = storage.getUsers();
+    const reqs = storage.getSignupRequests();
+    await pushCollectionToCanister("px_users", users);
+    await pushCollectionToCanister("px_signup_requests", reqs);
+    toast.success(`User approved. Login username: ${req.username || userId}`);
     load();
   };
 
-  const handleReject = (req: SignupRequest) => {
+  const handleReject = async (req: SignupRequest) => {
     storage.updateSignupRequest(req.id, { status: "rejected" });
+    const reqs = storage.getSignupRequests();
+    await pushCollectionToCanister("px_signup_requests", reqs);
     toast.error("Request rejected.");
     load();
   };
@@ -169,6 +177,11 @@ export default function SignupRequests() {
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
                       {req.fullName}
+                      {req.username && (
+                        <div className="text-xs text-blue-600 font-mono">
+                          @{req.username}
+                        </div>
+                      )}
                       {req.userId && (
                         <div className="text-xs text-green-600 font-mono">
                           {req.userId}

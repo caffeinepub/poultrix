@@ -168,6 +168,7 @@ export type User = {
 };
 
 export type SignupRequest = {
+  username?: string;
   id: string;
   fullName: string;
   mobileNumber: string;
@@ -381,10 +382,15 @@ function padNum(n: number) {
   return String(n).padStart(3, "0");
 }
 
-// Seed default superadmin
-function seedUsers() {
+// Seed default superadmin — only if no users exist in localStorage
+// (localStorage is populated from canister on startup by AuthContext)
+function seedSuperAdminLocal() {
   const users = get<User>("px_users");
-  if (users.length === 0) {
+  const hasSuperAdmin = users.some(
+    (u) => u.username?.toLowerCase() === "superadmin",
+  );
+  if (!hasSuperAdmin) {
+    // Don't overwrite existing users; just add superadmin if missing
     set("px_users", [
       {
         id: "sa-1",
@@ -395,266 +401,11 @@ function seedUsers() {
         employeeId: "EMP-001",
         active: true,
       },
-    ]);
-  }
-}
-seedUsers();
-
-// Seed demo user for testing — runs every load, ensures demo1990 always exists
-function seedDemoUser() {
-  // Ensure demo company exists
-  const companies = get<Company>("px_companies");
-  const demoCompanyId = "demo-company-001";
-  if (!companies.find((c) => c.id === demoCompanyId)) {
-    set("px_companies", [
-      ...companies,
-      {
-        id: demoCompanyId,
-        name: "Demo Poultry Pvt Ltd",
-        address: "Demo Address, City",
-        contactNumber: "9999999999",
-        email: "demo@poultrix.com",
-        subscriptionPlan: "Standard" as const,
-      },
-    ]);
-  }
-
-  const users = get<User>("px_users");
-  const exists = users.find((u) => u.username === "demo1990");
-  if (!exists) {
-    set("px_users", [
       ...users,
-      {
-        id: "demo-1990",
-        username: "demo1990",
-        password: "demo@123",
-        role: "CompanyAdmin" as const,
-        name: "Demo User 1990",
-        employeeId: "EMP-DEMO",
-        companyId: demoCompanyId,
-        active: true,
-      },
-    ]);
-  } else if (!exists.companyId) {
-    // Fix existing demo user that is missing companyId
-    set(
-      "px_users",
-      users.map((u) =>
-        u.username === "demo1990" ? { ...u, companyId: demoCompanyId } : u,
-      ),
-    );
-  }
-}
-seedDemoUser();
-
-// Seed default feed types
-function seedFeedTypes() {
-  const types = get<FeedType>("px_feed_types");
-  if (types.length === 0) {
-    set("px_feed_types", [
-      { id: "ft-1", name: "Pre-Starter", description: "For chicks 1-7 days" },
-      { id: "ft-2", name: "Starter", description: "For chicks 8-21 days" },
-      { id: "ft-3", name: "Grower", description: "For birds 22-35 days" },
-      {
-        id: "ft-4",
-        name: "Finisher",
-        description: "For birds 35+ days before sale",
-      },
     ]);
   }
 }
-seedFeedTypes();
-
-// Seed default general notifications for superadmin
-function seedNotifications() {
-  const notifs = get<Notification>("px_notifications");
-  if (notifs.length === 0) {
-    const now = new Date().toISOString();
-    set("px_notifications", [
-      {
-        id: "notif-1",
-        userId: "sa-1",
-        type: "general" as const,
-        title: "Welcome to Poultrix",
-        message:
-          "Welcome to Poultrix Smart Poultry Farm Management Platform. Get started by setting up your company structure.",
-        read: false,
-        createdAt: now,
-      },
-      {
-        id: "notif-2",
-        userId: "sa-1",
-        type: "trial_expiring" as const,
-        title: "Trial Expires in 3 Days",
-        message:
-          "Your free trial period ends in 3 days. Please activate your subscription to continue using Poultrix.",
-        read: false,
-        createdAt: now,
-      },
-      {
-        id: "notif-3",
-        userId: "sa-1",
-        type: "settlement_pending" as const,
-        title: "New Settlement Pending Review",
-        message:
-          "A new Growing Charge settlement is awaiting your review and confirmation in the Finance module.",
-        read: false,
-        createdAt: now,
-      },
-    ]);
-  }
-}
-seedNotifications();
-
-// Seed test supervisor user created by demo Company Admin
-function seedSupervisor01() {
-  const users = get<User>("px_users");
-  const exists = users.find((u) => u.username === "supervisor01");
-  if (!exists) {
-    set("px_users", [
-      ...users,
-      {
-        id: "supervisor01-id",
-        username: "supervisor01",
-        password: "123456",
-        role: "Supervisor" as const,
-        name: "Test Supervisor",
-        employeeId: "EMP-SUP01",
-        companyId: "demo-company-001",
-        createdBy: "demo-1990",
-        active: true,
-      },
-    ]);
-  }
-}
-seedSupervisor01();
-// Seed sukhvinder9929 test user
-function seedSukhvinder() {
-  const users = get<User>("px_users");
-  const exists = users.find(
-    (u) => u.username.toLowerCase() === "sukhvinder9929",
-  );
-  if (!exists) {
-    set("px_users", [
-      ...users,
-      {
-        id: "sukhvinder-9929-id",
-        username: "sukhvinder9929",
-        password: "Sukh@123",
-        role: "CompanyAdmin" as const,
-        name: "Sukhvinder",
-        employeeId: "ADM-0002",
-        companyId: "demo-company-001",
-        active: true,
-      },
-    ]);
-  } else if (exists.password !== "Sukh@123") {
-    set(
-      "px_users",
-      users.map((u) =>
-        u.username.toLowerCase() === "sukhvinder9929"
-          ? { ...u, password: "Sukh@123", active: true }
-          : u,
-      ),
-    );
-  }
-}
-seedSukhvinder();
-
-// Seed second test company for isolation testing
-function seedTestCompany2() {
-  const companies = get<Company>("px_companies");
-  const testCompanyId = "test-company-002";
-  if (!companies.find((c) => c.id === testCompanyId)) {
-    set("px_companies", [
-      ...companies,
-      {
-        id: testCompanyId,
-        name: "Test Agro Pvt Ltd",
-        address: "Test Address, City",
-        contactNumber: "8888888888",
-        email: "testadmin@poultrix.com",
-        subscriptionPlan: "Basic" as const,
-      },
-    ]);
-  }
-  const users = get<User>("px_users");
-  const exists = users.find((u) => u.username === "testadmin");
-  if (!exists) {
-    set("px_users", [
-      ...users,
-      {
-        id: "testadmin-002",
-        username: "testadmin",
-        password: "Test@123",
-        role: "CompanyAdmin" as const,
-        name: "Test Admin",
-        employeeId: "ADM-TC002",
-        companyId: testCompanyId,
-        active: true,
-      },
-    ]);
-  }
-}
-seedTestCompany2();
-
-// Seed admin123 test user
-function seedAdmin123() {
-  const users = get<User>("px_users");
-  const exists = users.find((u) => u.username === "admin123");
-  if (!exists) {
-    set("px_users", [
-      ...users,
-      {
-        id: "admin123-id",
-        username: "admin123",
-        password: "123456",
-        role: "CompanyAdmin" as const,
-        name: "Admin User 123",
-        employeeId: "ADM-0003",
-        companyId: "demo-company-001",
-        active: true,
-      },
-    ]);
-  } else {
-    // Ensure password and active status are correct
-    if (
-      exists.password !== "123456" ||
-      exists.active === false ||
-      !exists.companyId
-    ) {
-      set(
-        "px_users",
-        users.map((u) =>
-          u.username === "admin123"
-            ? {
-                ...u,
-                password: "123456",
-                active: true,
-                companyId: "demo-company-001",
-              }
-            : u,
-        ),
-      );
-    }
-  }
-  // Also ensure sukhvinder9929 has companyId
-  const allUsers = get<User>("px_users");
-  const sukh = allUsers.find(
-    (u) => u.username.toLowerCase() === "sukhvinder9929",
-  );
-  if (sukh && !sukh.companyId) {
-    set(
-      "px_users",
-      allUsers.map((u) =>
-        u.username.toLowerCase() === "sukhvinder9929"
-          ? { ...u, companyId: "demo-company-001" }
-          : u,
-      ),
-    );
-  }
-}
-seedAdmin123();
+seedSuperAdminLocal();
 
 export const storage = {
   // Users
@@ -977,8 +728,19 @@ export const storage = {
   getFeedTypes: () => {
     const types = get<FeedType>("px_feed_types");
     if (types.length === 0) {
-      seedFeedTypes();
-      return get<FeedType>("px_feed_types");
+      // Seed default feed types if empty
+      const defaults = [
+        { id: "ft-1", name: "Pre-Starter", description: "For chicks 1-7 days" },
+        { id: "ft-2", name: "Starter", description: "For chicks 8-21 days" },
+        { id: "ft-3", name: "Grower", description: "For birds 22-35 days" },
+        {
+          id: "ft-4",
+          name: "Finisher",
+          description: "For birds 35+ days before sale",
+        },
+      ];
+      set("px_feed_types", defaults);
+      return defaults;
     }
     return types;
   },

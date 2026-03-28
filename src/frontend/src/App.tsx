@@ -17,7 +17,6 @@ import ChicksPlacement from "./pages/ChicksPlacement";
 import Companies from "./pages/Companies";
 import DailyEntry from "./pages/DailyEntry";
 import Dashboard from "./pages/Dashboard";
-import DataMigration from "./pages/DataMigration";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import FarmDashboard from "./pages/FarmDashboard";
@@ -375,7 +374,7 @@ export default function App() {
                 path="data-migration"
                 element={
                   <ProtectedRoute roles={["SuperAdmin"]}>
-                    <DataMigration />
+                    <Navigate to="/dashboard" replace />
                   </ProtectedRoute>
                 }
               />

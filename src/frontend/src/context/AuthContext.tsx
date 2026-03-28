@@ -1,4 +1,4 @@
-import { pullFromCanister } from "@/lib/canisterSync";
+import { pullFromCanister, seedSuperAdminIfNeeded } from "@/lib/canisterSync";
 import { type User, storage } from "@/lib/storage";
 import {
   createContext,
@@ -26,17 +26,47 @@ type AuthContextType = {
   logout: () => void;
   hasRole: (roles: User["role"][]) => boolean;
   isSyncing: boolean;
+  isInitializing: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const sessionId = localStorage.getItem("px_session");
-    if (!sessionId) return null;
-    return storage.getUsers().find((u) => u.id === sessionId) ?? null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  // isInitializing = true while we're pulling from canister on startup
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // On mount: pull ALL data from canister, then seed superadmin if needed,
+  // then restore session if there was one.
+  useEffect(() => {
+    async function init() {
+      setIsInitializing(true);
+      try {
+        // Pull fresh data from canister — this overwrites localStorage cache
+        await pullFromCanister();
+        // If canister is empty (fresh deployment), seed superadmin
+        await seedSuperAdminIfNeeded();
+      } catch (e) {
+        console.warn("[AUTH] Init sync failed, using local cache:", e);
+        // If canister unreachable, still seed locally so login works
+        await seedSuperAdminIfNeeded();
+      } finally {
+        // Restore session from localStorage session token
+        const sessionId = localStorage.getItem("px_session");
+        if (sessionId) {
+          const user = storage.getUsers().find((u) => u.id === sessionId);
+          if (user && user.active !== false) {
+            setCurrentUser(user);
+          } else {
+            localStorage.removeItem("px_session");
+          }
+        }
+        setIsInitializing(false);
+      }
+    }
+    init();
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -53,18 +83,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log("[AUTH] Login attempt:", { username: trimmedUsername });
 
-      // First try localStorage (has seeded users)
-      let user = storage.getUserByUsername(trimmedUsername);
-
-      // If not found locally, pull from canister and retry
-      // This handles cross-device login where user was created on another device
-      if (!user) {
-        console.log("[AUTH] User not found locally, pulling from canister...");
-        setIsSyncing(true);
+      // Always pull fresh from canister before login
+      // This ensures we see users created on other devices
+      setIsSyncing(true);
+      try {
         await pullFromCanister();
+        await seedSuperAdminIfNeeded();
+      } catch (e) {
+        console.warn("[AUTH] Pre-login sync failed, using local:", e);
+      } finally {
         setIsSyncing(false);
-        user = storage.getUserByUsername(trimmedUsername);
       }
+
+      const user = storage.getUserByUsername(trimmedUsername);
 
       console.log(
         "[AUTH] User found:",
@@ -93,10 +124,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "wrong_password" };
       }
 
-      // Pull all data from canister in background after login
-      // so all modules show the same data as on other devices
-      pullFromCanister().catch(() => {});
-
       setCurrentUser(user);
       return { success: true };
     },
@@ -118,8 +145,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const companyId = currentUser?.companyId;
 
   const value = useMemo(
-    () => ({ currentUser, companyId, login, logout, hasRole, isSyncing }),
-    [currentUser, companyId, login, logout, hasRole, isSyncing],
+    () => ({
+      currentUser,
+      companyId,
+      login,
+      logout,
+      hasRole,
+      isSyncing,
+      isInitializing,
+    }),
+    [currentUser, companyId, login, logout, hasRole, isSyncing, isInitializing],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

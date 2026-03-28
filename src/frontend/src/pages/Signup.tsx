@@ -44,6 +44,7 @@ const INDIAN_STATES = [
 ];
 
 type FormData = {
+  username: string;
   fullName: string;
   mobileNumber: string;
   email: string;
@@ -59,6 +60,7 @@ type FormData = {
 type FormErrors = Partial<Record<keyof FormData, string>>;
 
 const EMPTY_FORM: FormData = {
+  username: "",
   fullName: "",
   mobileNumber: "",
   email: "",
@@ -87,6 +89,21 @@ export default function Signup({ open, onClose }: Props) {
   const validate = (): boolean => {
     const e: FormErrors = {};
     if (!form.fullName.trim()) e.fullName = "Full name is required";
+    if (!form.username.trim() || form.username.trim().length < 3) {
+      e.username = "Username must be at least 3 characters";
+    } else if (!/^[a-zA-Z0-9_]+$/.test(form.username.trim())) {
+      e.username = "Only letters, numbers, and underscores allowed";
+    } else {
+      const allUsers = storage.getUsers();
+      if (
+        allUsers.some(
+          (u) =>
+            u.username.toLowerCase() === form.username.trim().toLowerCase(),
+        )
+      ) {
+        e.username = "Username already taken";
+      }
+    }
     if (!form.mobileNumber.trim() || !/^\d{10}$/.test(form.mobileNumber.trim()))
       e.mobileNumber = "Enter a valid 10-digit mobile number";
     if (!form.email.trim() || !/^[^@]+@[^@]+\.[^@]+$/.test(form.email))
@@ -123,6 +140,7 @@ export default function Signup({ open, onClose }: Props) {
         mobile: form.mobileNumber,
       });
       const result = storage.addSignupRequest({
+        username: form.username.trim().toLowerCase(),
         fullName: form.fullName.trim(),
         mobileNumber: form.mobileNumber.trim(),
         email: form.email.trim().toLowerCase(),
@@ -260,6 +278,61 @@ export default function Signup({ open, onClose }: Props) {
                     {errors.fullName && (
                       <p className="text-red-500 text-xs">{errors.fullName}</p>
                     )}
+                  </div>
+
+                  {/* Username */}
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor="s-username"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Username <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="s-username"
+                        data-ocid="signup.input"
+                        value={form.username}
+                        onChange={(e) => setField("username", e.target.value)}
+                        placeholder="Choose a username (e.g. john_farmer)"
+                        className={`h-9 pr-8 ${errors.username ? "border-red-400" : form.username.trim().length >= 3 ? "border-green-400" : "border-gray-200"} focus:border-green-500`}
+                      />
+                      {form.username.trim().length >= 3 && (
+                        <span className="absolute right-2 top-2.5 text-sm font-bold">
+                          {storage
+                            .getUsers()
+                            .some(
+                              (u) =>
+                                u.username.toLowerCase() ===
+                                form.username.trim().toLowerCase(),
+                            ) ? (
+                            <span className="text-red-500">✗</span>
+                          ) : (
+                            <span className="text-green-500">✓</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    {errors.username && (
+                      <p className="text-red-500 text-xs">{errors.username}</p>
+                    )}
+                    {!errors.username &&
+                      form.username.trim().length >= 3 &&
+                      (storage
+                        .getUsers()
+                        .some(
+                          (u) =>
+                            u.username.toLowerCase() ===
+                            form.username.trim().toLowerCase(),
+                        ) ? (
+                        <p className="text-red-500 text-xs">
+                          Username already taken
+                        </p>
+                      ) : (
+                        <p className="text-green-600 text-xs">
+                          Username available ✓
+                        </p>
+                      ))}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

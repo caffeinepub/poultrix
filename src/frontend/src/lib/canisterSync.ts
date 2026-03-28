@@ -1,12 +1,11 @@
 /**
  * canisterSync.ts
- * Syncs localStorage data to/from the Motoko backend canister.
- * This enables cross-device data access: any browser/device sees the same data.
+ * Canister is the SINGLE SOURCE OF TRUTH.
+ * localStorage is used only as a local cache for performance.
  */
 
 import { createActorWithConfig } from "@/config";
 
-// Maps localStorage key → { setterSuffix for canister method, exportKey in exportAll() }
 const KEY_MAP: Record<string, { suffix: string; exportKey: string }> = {
   px_users: { suffix: "Users", exportKey: "users" },
   px_companies: { suffix: "Companies", exportKey: "companies" },
@@ -31,8 +30,8 @@ const KEY_MAP: Record<string, { suffix: string; exportKey: string }> = {
 };
 
 /**
- * Push a single collection to the canister (fire-and-forget, never blocks UI).
- * Called after every localStorage write in storage.ts.
+ * Push a single collection to the canister.
+ * Called after every localStorage write so canister stays in sync.
  */
 export function pushToCanister(key: string, data: unknown[]): void {
   const mapping = KEY_MAP[key];
@@ -54,10 +53,9 @@ export function pushToCanister(key: string, data: unknown[]): void {
 }
 
 /**
- * Pull ALL collections from the canister and merge into localStorage.
- * Called on login so any device sees the same data.
- * Only overwrites a collection if the canister has non-empty data for it.
- * Returns true if any data was pulled, false if canister is empty.
+ * Pull ALL collections from the canister and overwrite localStorage.
+ * This is called on app startup and after login.
+ * Returns the users array if found, so AuthContext can restore session.
  */
 export async function pullFromCanister(): Promise<boolean> {
   try {
@@ -76,8 +74,8 @@ export async function pullFromCanister(): Promise<boolean> {
     }
 
     console.log(
-      "[SYNC] Pull from canister:",
-      anyData ? "data loaded" : "canister is empty, using local seed data",
+      "[SYNC] Canister pull:",
+      anyData ? "data loaded" : "canister is empty",
     );
     return anyData;
   } catch (e) {
@@ -87,27 +85,58 @@ export async function pullFromCanister(): Promise<boolean> {
 }
 
 /**
- * Push ALL current localStorage data to the canister at once.
- * Useful for initial migration from a device that already has data.
+ * Push a specific collection by key (awaited version for critical ops).
  */
-export async function pushAllToCanister(): Promise<void> {
+export async function pushCollectionToCanister(
+  key: string,
+  data: unknown[],
+): Promise<void> {
+  const mapping = KEY_MAP[key];
+  if (!mapping) return;
   try {
     const actor = await createActorWithConfig();
-    for (const [lsKey, mapping] of Object.entries(KEY_MAP)) {
-      const raw = localStorage.getItem(lsKey);
-      const data = raw ? (JSON.parse(raw) as unknown[]) : [];
-      if (data.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const setterFn = (actor as any)[`set${mapping.suffix}`] as (
-          json: string,
-        ) => Promise<void>;
-        if (typeof setterFn === "function") {
-          await setterFn.call(actor, JSON.stringify(data));
-        }
-      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const setterFn = (actor as any)[`set${mapping.suffix}`] as (
+      json: string,
+    ) => Promise<void>;
+    if (typeof setterFn === "function") {
+      await setterFn.call(actor, JSON.stringify(data));
+      console.log(`[SYNC] Pushed ${key} to canister (${data.length} records)`);
     }
-    console.log("[SYNC] Full push to canister complete");
   } catch (e) {
-    console.warn("[SYNC] Full push failed:", e);
+    console.warn(`[SYNC] Critical push failed for ${key}:`, e);
+  }
+}
+
+/**
+ * Seed the superadmin user into the canister if it doesn't exist.
+ * Called once on app startup after pulling from canister.
+ */
+export async function seedSuperAdminIfNeeded(): Promise<void> {
+  try {
+    const raw = localStorage.getItem("px_users");
+    const users = raw ? (JSON.parse(raw) as Array<{ username?: string }>) : [];
+    const hasSuperAdmin = users.some(
+      (u) => u.username?.toLowerCase() === "superadmin",
+    );
+    if (!hasSuperAdmin) {
+      const newUsers = [
+        {
+          id: "sa-1",
+          username: "superadmin",
+          password: "Admin@123",
+          role: "SuperAdmin",
+          name: "Super Admin",
+          employeeId: "EMP-001",
+          active: true,
+        },
+        ...users,
+      ];
+      localStorage.setItem("px_users", JSON.stringify(newUsers));
+      await pushCollectionToCanister("px_users", newUsers);
+      console.log("[SEED] SuperAdmin seeded into canister");
+    }
+  } catch (e) {
+    console.warn("[SEED] Seed failed:", e);
   }
 }
