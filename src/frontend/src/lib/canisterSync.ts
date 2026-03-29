@@ -14,19 +14,39 @@ const KEY_MAP: Record<string, { suffix: string; exportKey: string }> = {
   px_farms: { suffix: "Farms", exportKey: "farms" },
   px_sheds: { suffix: "Sheds", exportKey: "sheds" },
   px_batches: { suffix: "Batches", exportKey: "batches" },
-  px_daily_entries: { suffix: "DailyEntries", exportKey: "dailyEntries" },
+  // Fixed: was px_daily_entries (wrong), actual key used in storage.ts is px_daily
+  px_daily: { suffix: "DailyEntries", exportKey: "dailyEntries" },
   px_feed_types: { suffix: "FeedTypes", exportKey: "feedTypes" },
   px_feed_suppliers: { suffix: "FeedSuppliers", exportKey: "feedSuppliers" },
   px_feed_purchases: { suffix: "FeedPurchases", exportKey: "feedPurchases" },
-  px_feed_stocks: { suffix: "FeedStocks", exportKey: "feedStocks" },
+  // Fixed: was px_feed_stocks (wrong), actual key used in storage.ts is px_feed_stock
+  px_feed_stock: { suffix: "FeedStocks", exportKey: "feedStocks" },
   px_feed_issues: { suffix: "FeedIssues", exportKey: "feedIssues" },
-  px_bird_sales: { suffix: "BirdSales", exportKey: "birdSales" },
+  // Fixed: was px_bird_sales (wrong), actual key used in storage.ts is px_sales
+  px_sales: { suffix: "BirdSales", exportKey: "birdSales" },
   px_expenses: { suffix: "Expenses", exportKey: "expenses" },
   px_signup_requests: { suffix: "SignupRequests", exportKey: "signupRequests" },
   px_audit_logs: { suffix: "AuditLogs", exportKey: "auditLogs" },
   px_payments: { suffix: "Payments", exportKey: "payments" },
   px_subscriptions: { suffix: "Subscriptions", exportKey: "subscriptions" },
   px_notifications: { suffix: "Notifications", exportKey: "notifications" },
+  // Additional collections
+  px_medicines: { suffix: "Medicines", exportKey: "medicines" },
+  px_vaccines: { suffix: "Vaccines", exportKey: "vaccines" },
+  px_receipts: { suffix: "Receipts", exportKey: "receipts" },
+  px_gc_schemes: { suffix: "GcSchemes", exportKey: "gcSchemes" },
+  px_gc_settlements: { suffix: "GcSettlements", exportKey: "gcSettlements" },
+  px_pending_settlements: {
+    suffix: "PendingSettlements",
+    exportKey: "pendingSettlements",
+  },
+  px_ledger_entries: { suffix: "LedgerEntries", exportKey: "ledgerEntries" },
+  px_sub_payments: { suffix: "SubPayments", exportKey: "subPayments" },
+  px_sub_invoices: { suffix: "SubInvoices", exportKey: "subInvoices" },
+  px_sub_notifications: {
+    suffix: "SubNotifications",
+    exportKey: "subNotifications",
+  },
 };
 
 /**
@@ -35,7 +55,10 @@ const KEY_MAP: Record<string, { suffix: string; exportKey: string }> = {
  */
 export function pushToCanister(key: string, data: unknown[]): void {
   const mapping = KEY_MAP[key];
-  if (!mapping) return;
+  if (!mapping) {
+    console.warn(`[SYNC] No KEY_MAP entry for localStorage key: ${key}`);
+    return;
+  }
 
   createActorWithConfig()
     .then((actor) => {
@@ -43,9 +66,11 @@ export function pushToCanister(key: string, data: unknown[]): void {
       const setterFn = (actor as any)[`set${mapping.suffix}`] as (
         json: string,
       ) => Promise<void>;
-      if (typeof setterFn === "function") {
-        return setterFn.call(actor, JSON.stringify(data));
+      if (typeof setterFn !== "function") {
+        console.warn(`[SYNC] setter set${mapping.suffix} not found on actor`);
+        return;
       }
+      return setterFn.call(actor, JSON.stringify(data));
     })
     .catch((e) => {
       console.warn(`[SYNC] Push failed for ${key}:`, e);
@@ -92,17 +117,22 @@ export async function pushCollectionToCanister(
   data: unknown[],
 ): Promise<void> {
   const mapping = KEY_MAP[key];
-  if (!mapping) return;
+  if (!mapping) {
+    console.warn(`[SYNC] No KEY_MAP entry for localStorage key: ${key}`);
+    return;
+  }
   try {
     const actor = await createActorWithConfig();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const setterFn = (actor as any)[`set${mapping.suffix}`] as (
       json: string,
     ) => Promise<void>;
-    if (typeof setterFn === "function") {
-      await setterFn.call(actor, JSON.stringify(data));
-      console.log(`[SYNC] Pushed ${key} to canister (${data.length} records)`);
+    if (typeof setterFn !== "function") {
+      console.warn(`[SYNC] setter set${mapping.suffix} not found on actor`);
+      return;
     }
+    await setterFn.call(actor, JSON.stringify(data));
+    console.log(`[SYNC] Pushed ${key} to canister (${data.length} records)`);
   } catch (e) {
     console.warn(`[SYNC] Critical push failed for ${key}:`, e);
   }

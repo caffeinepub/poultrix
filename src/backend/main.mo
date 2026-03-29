@@ -66,6 +66,17 @@ actor {
   stable var paymentsJson : Text = "[]";
   stable var subscriptionsJson : Text = "[]";
   stable var notificationsJson : Text = "[]";
+  // ---- Additional collections ----
+  stable var medicinesJson : Text = "[]";
+  stable var vaccinesJson : Text = "[]";
+  stable var receiptsJson : Text = "[]";
+  stable var gcSchemesJson : Text = "[]";
+  stable var gcSettlementsJson : Text = "[]";
+  stable var pendingSettlementsJson : Text = "[]";
+  stable var ledgerEntriesJson : Text = "[]";
+  stable var subPaymentsJson : Text = "[]";
+  stable var subInvoicesJson : Text = "[]";
+  stable var subNotificationsJson : Text = "[]";
 
   public func setUsers(json : Text) : async () { usersJson := json };
   public query func getUsers() : async Text { usersJson };
@@ -127,6 +138,36 @@ actor {
   public func setNotifications(json : Text) : async () { notificationsJson := json };
   public query func getNotifications() : async Text { notificationsJson };
 
+  public func setMedicines(json : Text) : async () { medicinesJson := json };
+  public query func getMedicines() : async Text { medicinesJson };
+
+  public func setVaccines(json : Text) : async () { vaccinesJson := json };
+  public query func getVaccines() : async Text { vaccinesJson };
+
+  public func setReceipts(json : Text) : async () { receiptsJson := json };
+  public query func getReceipts() : async Text { receiptsJson };
+
+  public func setGcSchemes(json : Text) : async () { gcSchemesJson := json };
+  public query func getGcSchemes() : async Text { gcSchemesJson };
+
+  public func setGcSettlements(json : Text) : async () { gcSettlementsJson := json };
+  public query func getGcSettlements() : async Text { gcSettlementsJson };
+
+  public func setPendingSettlements(json : Text) : async () { pendingSettlementsJson := json };
+  public query func getPendingSettlements() : async Text { pendingSettlementsJson };
+
+  public func setLedgerEntries(json : Text) : async () { ledgerEntriesJson := json };
+  public query func getLedgerEntries() : async Text { ledgerEntriesJson };
+
+  public func setSubPayments(json : Text) : async () { subPaymentsJson := json };
+  public query func getSubPayments() : async Text { subPaymentsJson };
+
+  public func setSubInvoices(json : Text) : async () { subInvoicesJson := json };
+  public query func getSubInvoices() : async Text { subInvoicesJson };
+
+  public func setSubNotifications(json : Text) : async () { subNotificationsJson := json };
+  public query func getSubNotifications() : async Text { subNotificationsJson };
+
   public query func exportAll() : async Text {
     "{" #
     "\"users\":" # usersJson # "," #
@@ -148,7 +189,17 @@ actor {
     "\"auditLogs\":" # auditLogsJson # "," #
     "\"payments\":" # paymentsJson # "," #
     "\"subscriptions\":" # subscriptionsJson # "," #
-    "\"notifications\":" # notificationsJson #
+    "\"notifications\":" # notificationsJson # "," #
+    "\"medicines\":" # medicinesJson # "," #
+    "\"vaccines\":" # vaccinesJson # "," #
+    "\"receipts\":" # receiptsJson # "," #
+    "\"gcSchemes\":" # gcSchemesJson # "," #
+    "\"gcSettlements\":" # gcSettlementsJson # "," #
+    "\"pendingSettlements\":" # pendingSettlementsJson # "," #
+    "\"ledgerEntries\":" # ledgerEntriesJson # "," #
+    "\"subPayments\":" # subPaymentsJson # "," #
+    "\"subInvoices\":" # subInvoicesJson # "," #
+    "\"subNotifications\":" # subNotificationsJson #
     "}"
   };
 };
